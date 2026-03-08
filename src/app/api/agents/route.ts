@@ -136,7 +136,11 @@ export async function POST(req: NextRequest) {
 
                 // ── AGENT 1: ORCHESTRATOR ─────────────────────────────────
                 send('phase', { agent: 'orchestrator', label: '🧠 Orchestrator analyzing your request...' })
+                send('thought', { agent: 'orchestrator', message: 'Analyzing project scope and selecting optimal design system...' })
+
                 const orchestratorPlan = await runOrchestrator(prompt, opts)
+
+                send('thought', { agent: 'orchestrator', message: `Determined project type: ${orchestratorPlan.project_type}. Planning ${orchestratorPlan.file_plan.length} files.` })
                 send('plan', orchestratorPlan)
                 send('phase', {
                     agent: 'orchestrator',
@@ -146,7 +150,11 @@ export async function POST(req: NextRequest) {
 
                 // ── AGENT 2: PLANNER ──────────────────────────────────────
                 send('phase', { agent: 'planner', label: '📐 Planner designing architecture...' })
+                send('thought', { agent: 'planner', message: 'Mapping file dependencies and defining visual design tokens...' })
+
                 const plannerOutput = await runPlanner(orchestratorPlan, prompt, opts)
+
+                send('thought', { agent: 'planner', message: `Architecture validated. Design style set to: ${plannerOutput.design_tokens.style}.` })
                 send('architecture', plannerOutput)
                 send('phase', {
                     agent: 'planner',
@@ -176,9 +184,16 @@ export async function POST(req: NextRequest) {
                         total: filesToGenerate.length,
                     })
 
+                    send('thought', {
+                        agent: 'coder',
+                        message: `Implementing component: ${fileSpec.path.split('/').pop()}. Applying Figma-grade styling...`,
+                        file: fileSpec.path
+                    })
+
                     try {
-                        // Dynamic throttling: Kimi is fast (1s), Gemini needs safety (7s)
-                        const delay = opts.kimiKey ? 1000 : 7000
+                        // Dynamic throttling: Kimi is fast (1s), Gemini needs safety (7s on free tier)
+                        // If it's a refactor, we can be faster
+                        const delay = opts.kimiKey ? 800 : (opts.geminiKey ? 7500 : 2000)
                         if (i > 0) {
                             await new Promise(r => setTimeout(r, delay))
                         }
@@ -196,7 +211,7 @@ export async function POST(req: NextRequest) {
                     } catch (err: any) {
                         // If it's a persistent rate limit error, we must ABORT the build
                         if (err.message?.includes('429')) {
-                            throw new Error(`CRITICAL: Gemini Quota Exceeded. Please try again in 1 minute.`)
+                            throw new Error(`CRITICAL: AI Quota Exceeded. Please try again in 1 minute.`)
                         }
 
                         send('error', { file: fileSpec.path, message: err.message })
@@ -206,6 +221,8 @@ export async function POST(req: NextRequest) {
 
                 // ── PREVIEW GENERATOR ─────────────────────────────────────
                 send('phase', { agent: 'preview', label: '🎨 Generating live preview...' })
+                send('thought', { agent: 'preview', message: 'Synthesizing all components into a standalone high-fidelity preview...' })
+
                 try {
                     const previewHtml = await runPreviewGenerator(plannerOutput, orchestratorPlan, prompt, opts)
                     generatedFiles['public/preview.html'] = previewHtml

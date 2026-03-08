@@ -1,7 +1,7 @@
 'use client'
-
-import { Brain, Cpu, Code2, Wand2, Bug, Eye, CheckCircle2, Loader2, ChevronDown, ChevronRight, X } from 'lucide-react'
-import { useState } from 'react'
+import { Brain, Cpu, Code2, Wand2, Bug, Eye, CheckCircle2, Loader2, ChevronDown, ChevronRight, X, Terminal, Activity, Zap } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export type AgentPhase = {
     agent: 'orchestrator' | 'planner' | 'coder' | 'refactor' | 'preview' | 'debug'
@@ -10,6 +10,7 @@ export type AgentPhase = {
     file?: string
     index?: number
     total?: number
+    thought?: string
 }
 
 export type AgentStatus = 'idle' | 'running' | 'done' | 'error'
@@ -21,39 +22,16 @@ interface AgentProgressProps {
     status: AgentStatus
     plan?: { project_type: string; features: string[]; file_plan: string[] } | null
     onClose?: () => void
+    thoughts?: Array<{ agent: string, message: string, timestamp: number }>
 }
 
 const AGENT_META: Record<string, { icon: React.ReactNode; color: string; name: string }> = {
-    orchestrator: {
-        icon: <Brain size={14} />,
-        color: 'text-violet-400',
-        name: 'Orchestrator',
-    },
-    planner: {
-        icon: <Cpu size={14} />,
-        color: 'text-blue-400',
-        name: 'Planner',
-    },
-    coder: {
-        icon: <Code2 size={14} />,
-        color: 'text-cyan-400',
-        name: 'Code Generator',
-    },
-    refactor: {
-        icon: <Wand2 size={14} />,
-        color: 'text-amber-400',
-        name: 'Refactor Agent',
-    },
-    preview: {
-        icon: <Eye size={14} />,
-        color: 'text-emerald-400',
-        name: 'Preview Generator',
-    },
-    debug: {
-        icon: <Bug size={14} />,
-        color: 'text-red-400',
-        name: 'Debug Agent',
-    },
+    orchestrator: { icon: <Brain size={14} />, color: 'text-violet-400', name: 'Orchestrator' },
+    planner: { icon: <Cpu size={14} />, color: 'text-blue-400', name: 'Planner' },
+    coder: { icon: <Code2 size={14} />, color: 'text-cyan-400', name: 'Code Generator' },
+    refactor: { icon: <Wand2 size={14} />, color: 'text-amber-400', name: 'Refactor Agent' },
+    preview: { icon: <Eye size={14} />, color: 'text-emerald-400', name: 'Preview Generator' },
+    debug: { icon: <Bug size={14} />, color: 'text-red-400', name: 'Debug Agent' },
 }
 
 export default function AgentProgress({
@@ -63,8 +41,16 @@ export default function AgentProgress({
     status,
     plan,
     onClose,
+    thoughts = []
 }: AgentProgressProps) {
-    const [filesExpanded, setFilesExpanded] = useState(false)
+    const [isExpanded, setIsExpanded] = useState(true)
+    const logRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (logRef.current) {
+            logRef.current.scrollTop = logRef.current.scrollHeight
+        }
+    }, [thoughts, currentPhase])
 
     if (status === 'idle') return null
 
@@ -74,103 +60,136 @@ export default function AgentProgress({
         : completedPhases.length > 0 ? 0.9 : 0.1
 
     return (
-        <div className="border border-white/10 glass-card bg-vibe-bg-primary/95 backdrop-blur-3xl px-4 py-3 space-y-3 shadow-2xl relative pointer-events-auto overflow-hidden animate-slide-up">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    {status === 'running' ? (
-                        <Loader2 size={14} className="text-violet-400 animate-spin" />
-                    ) : (
-                        <CheckCircle2 size={14} className="text-emerald-400" />
-                    )}
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-white/70">
-                        {status === 'running' ? 'Multi-Agent System Running' : 'Generation Complete'}
-                    </span>
-                </div>
+        <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="w-full max-w-xl mx-auto border border-white/10 rounded-[2rem] bg-[#0B0F19]/90 backdrop-blur-3xl shadow-[0_32px_64px_rgba(0,0,0,0.5)] overflow-hidden relative group pointer-events-auto"
+        >
+            {/* Top Shine */}
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-orange-500/50 to-transparent z-10" />
+
+            {/* Subtle Gradient Orbs */}
+            <div className="absolute -top-20 -left-20 w-40 h-40 bg-orange-600/10 rounded-full blur-[80px] pointer-events-none" />
+            <div className="absolute -bottom-20 -right-20 w-40 h-40 bg-blue-600/10 rounded-full blur-[80px] pointer-events-none" />
+
+            {/* Header Area */}
+            <div className="px-6 py-4 flex items-center justify-between border-b border-white/5 bg-white/[0.02]">
                 <div className="flex items-center gap-3">
-                    {generatedFiles.length > 0 && (
-                        <button
-                            onClick={() => setFilesExpanded(!filesExpanded)}
-                            className="flex items-center gap-1 text-[10px] text-white/40 hover:text-white/70 transition-colors"
-                        >
-                            {generatedFiles.length} files
-                            {filesExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-                        </button>
-                    )}
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-500 ${status === 'running' ? 'bg-orange-500/10 text-orange-400 animate-pulse' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                        {status === 'running' ? <Activity size={16} /> : <CheckCircle2 size={16} />}
+                    </div>
+                    <div className="space-y-0.5">
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40">Multi-Agent Core</h3>
+                        <p className="text-xs font-bold text-white tracking-tight">
+                            {status === 'running' ? 'Active Synthesis...' : 'Build Finalized'}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-white/30 hover:text-white transition-all"
+                    >
+                        {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                    </button>
                     {onClose && (
-                        <button
-                            onClick={onClose}
-                            className="p-1 rounded-md hover:bg-white/5 text-white/20 hover:text-white transition-colors"
-                        >
-                            <X size={14} />
+                        <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-white/30 hover:bg-red-500/10 hover:text-red-400 transition-all">
+                            <X size={16} />
                         </button>
                     )}
                 </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                <div
-                    className="h-full bg-gradient-to-r from-vibe-accent-orange to-vibe-accent-orange-light rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(progress * 100, 100)}%` }}
-                />
-            </div>
-
-            {/* Current Phase */}
-            {currentPhase && (
-                <div className={`flex items-center gap-2 ${AGENT_META[currentPhase.agent]?.color || 'text-white/60'}`}>
-                    {AGENT_META[currentPhase.agent]?.icon}
-                    <span className="text-[11px] font-medium truncate max-w-[280px]">
-                        {currentPhase.label}
-                    </span>
-                    {currentPhase.index && currentPhase.total && (
-                        <span className="text-[10px] text-white/30 ml-auto shrink-0">
-                            {currentPhase.index}/{currentPhase.total}
-                        </span>
-                    )}
-                </div>
-            )}
-
-            {/* Plan preview (from orchestrator) */}
-            {plan && (
-                <div className="flex flex-wrap gap-1.5">
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/20 uppercase tracking-wider font-bold">
-                        {plan.project_type}
-                    </span>
-                    {plan.features.slice(0, 3).map(f => (
-                        <span key={f} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40 border border-white/5">
-                            {f}
-                        </span>
-                    ))}
-                </div>
-            )}
-
-            {/* Completed phases */}
-            {completedPhases.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                    {completedPhases.map((p, i) => {
-                        const meta = AGENT_META[p.agent]
-                        return (
-                            <div key={i} className={`flex items-center gap-1 text-[10px] ${meta?.color || 'text-white/40'} opacity-60`}>
-                                <CheckCircle2 size={9} />
-                                <span>{meta?.name}</span>
+            <AnimatePresence>
+                {isExpanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                    >
+                        {/* THE THOUGHT LOG (Terminal Style) */}
+                        <div className="px-6 py-4 bg-black/40 font-mono relative">
+                            <div className="absolute top-2 right-4 flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500/40" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500/40" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/40" />
                             </div>
-                        )
-                    })}
-                </div>
-            )}
 
-            {/* Generated files list */}
-            {filesExpanded && generatedFiles.length > 0 && (
-                <div className="mt-1 space-y-0.5 max-h-32 overflow-y-auto">
-                    {generatedFiles.map(f => (
-                        <div key={f} className="flex items-center gap-1.5 text-[10px] text-white/30">
-                            <Code2 size={8} className="text-cyan-500/50 shrink-0" />
-                            <span className="font-mono truncate">{f}</span>
+                            <div ref={logRef} className="h-40 overflow-y-auto space-y-2 no-scrollbar text-[10px] leading-relaxed">
+                                {thoughts.length === 0 && (
+                                    <div className="text-white/20 animate-pulse">Initializing neural context...</div>
+                                )}
+                                {thoughts.map((t, i) => (
+                                    <motion.div
+                                        key={i}
+                                        initial={{ opacity: 0, x: -5 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        className="flex gap-3"
+                                    >
+                                        <span className={`uppercase font-black tracking-widest shrink-0 ${AGENT_META[t.agent]?.color || 'text-white/40'}`}>
+                                            [{AGENT_META[t.agent]?.name.split(' ')[0]}]
+                                        </span>
+                                        <span className="text-white/60 tracking-tight">{t.message}</span>
+                                    </motion.div>
+                                ))}
+                                {currentPhase && status === 'running' && (
+                                    <div className="flex gap-3 text-white">
+                                        <span className="animate-pulse">_</span>
+                                        <span className="text-orange-400/80 italic">{currentPhase.label}</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    ))}
-                </div>
-            )}
-        </div>
+
+                        {/* Progress Bar Area */}
+                        <div className="px-6 py-4 space-y-4">
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-[10px] uppercase font-black tracking-widest text-white/10">
+                                    <span>Sync Progress</span>
+                                    <span>{Math.round(progress * 100)}%</span>
+                                </div>
+                                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden relative">
+                                    <motion.div
+                                        className="h-full bg-gradient-to-r from-orange-600 via-orange-400 to-pink-500 rounded-full"
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${progress * 100}%` }}
+                                        transition={{ duration: 0.5 }}
+                                    />
+                                    <motion.div
+                                        className="absolute top-0 bottom-0 w-20 bg-white/20 blur-xl"
+                                        animate={{ x: [-100, 500] }}
+                                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Plan & Stats */}
+                            <div className="flex items-center justify-between border-t border-white/5 pt-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-1.5 text-white/30">
+                                        <Terminal size={12} />
+                                        <span className="text-[10px] font-bold uppercase tracking-widest">{plan?.project_type || 'Custom App'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-white/30 border-l border-white/10 pl-4">
+                                        <Zap size={11} className="text-orange-500" />
+                                        <span className="text-[10px] font-bold uppercase tracking-widest">{generatedFiles.length} nodes</span>
+                                    </div>
+                                </div>
+
+                                <div className="flex -space-x-2">
+                                    {['orchestrator', 'planner', 'coder'].map((agent) => (
+                                        <div key={agent} className={`w-6 h-6 rounded-full border border-[#0B0F19] bg-white/[0.03] flex items-center justify-center ${AGENT_META[agent].color} bg-black/40 backdrop-blur-xl shadow-lg ring-1 ring-white/10`}>
+                                            {AGENT_META[agent].icon}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.div>
     )
 }

@@ -126,6 +126,20 @@ export default function Sidebar({ usage = { used: 13, total: 20 } }: SidebarProp
                     </div>
                 </div>
             </div>
+            {/* User Profile Area */}
+            <div className="p-4 border-t border-white/[0.06] relative z-10 bg-white/[0.02] backdrop-blur-3xl group">
+                <button className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-white/[0.03] transition-all border border-transparent hover:border-white/5 active:scale-95 duration-200">
+                    <div className="w-9 h-9 rounded-xl bg-orange-600/20 border border-orange-500/30 flex items-center justify-center relative overflow-hidden">
+                        <span className="text-orange-400 font-bold text-xs uppercase tracking-widest">S</span>
+                        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-transparent" />
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                        <p className="text-xs font-bold text-white uppercase tracking-widest truncate">Engineer</p>
+                        <p className="text-[10px] text-white/30 font-medium truncate">Premium Account</p>
+                    </div>
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse" />
+                </button>
+            </div>
         </aside>
     )
 }

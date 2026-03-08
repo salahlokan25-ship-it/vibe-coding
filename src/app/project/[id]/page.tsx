@@ -33,7 +33,7 @@ function WorkspaceContent() {
     const [splitRatio, setSplitRatio] = useState(55)
     const [chatWidth] = useState(420)
     const [hasLoadedState, setHasLoadedState] = useState(false)
-    const [showAgentProgress, setShowAgentProgress] = useState(true)
+    const [showAgentProgress, setShowAgentProgress] = useState(false)
     const [isResizing, setIsResizing] = useState(false)
 
     // Agent progress state
@@ -42,6 +42,7 @@ function WorkspaceContent() {
     const [agentStatus, setAgentStatus] = useState<AgentStatus>('idle')
     const [agentPlan, setAgentPlan] = useState<any>(null)
     const [agentFiles, setAgentFiles] = useState<string[]>([])
+    const [thoughts, setThoughts] = useState<Array<{ agent: string, message: string, timestamp: number }>>([])
 
     // Ref to always have latest projectFiles in callbacks without stale closure
     const projectFilesRef = useRef<Record<string, string>>({})
@@ -198,6 +199,10 @@ function WorkspaceContent() {
                                 }
                             }
 
+                            if (type === 'thought') {
+                                setThoughts(prev => [...prev, { ...payload, timestamp: Date.now() }])
+                            }
+
                             if (type === 'plan') {
                                 setAgentPlan(payload)
                             }
@@ -229,6 +234,19 @@ function WorkspaceContent() {
                                 setGeneratedCode(rawCode)
                                 setAgentStatus('done')
                                 setIsRefactoring(mode === 'refactor')
+
+                                // Trigger Celebration!
+                                try {
+                                    const confetti = (await import('canvas-confetti')).default
+                                    confetti({
+                                        particleCount: 150,
+                                        spread: 70,
+                                        origin: { y: 0.6 },
+                                        colors: ['#FF5C00', '#FF8F00', '#FFD600', '#FFFFFF']
+                                    })
+                                } catch (e) {
+                                    console.warn('Confetti failed', e)
+                                }
 
                                 // Generate a project name from the prompt if not already set
                                 const newName = projectName === 'Untitled Project'
@@ -390,6 +408,7 @@ function WorkspaceContent() {
                         generatedFiles={agentFiles}
                         status={agentStatus}
                         plan={agentPlan}
+                        thoughts={thoughts}
                         onClose={() => setShowAgentProgress(false)}
                     />
                 )}
