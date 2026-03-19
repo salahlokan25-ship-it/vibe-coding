@@ -21,15 +21,25 @@ export default function AuthPage() {
             if (isLogin) {
                 const { error } = await supabase.auth.signInWithPassword({ email, password })
                 if (error) throw error
+                window.location.href = '/dashboard'
             } else {
-                const { error } = await supabase.auth.signUp({ email, password })
+                const { data, error } = await supabase.auth.signUp({ email, password })
                 if (error) throw error
-                // Tell user to check email if signup
-                alert('Success! Please check your email to confirm your account.')
+
+                // If email confirmation is required by Supabase, session will be null
+                if (data.session) {
+                    window.location.href = '/dashboard'
+                } else {
+                    setError('✅ Success! Please check your email to confirm your account, then sign in.')
+                    setIsLogin(true)
+                }
             }
-            router.push('/dashboard')
         } catch (err: any) {
-            setError(err.message)
+            let msg = err.message
+            if (msg.includes('Invalid login credentials')) {
+                msg = 'Invalid email or password. (Wait, did you confirm your email link after signing up?)'
+            }
+            setError(msg)
         } finally {
             setLoading(false)
         }

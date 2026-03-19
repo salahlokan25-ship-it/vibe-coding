@@ -28,10 +28,18 @@ interface AgentProgressProps {
 const AGENT_META: Record<string, { icon: React.ReactNode; color: string; name: string }> = {
     orchestrator: { icon: <Brain size={14} />, color: 'text-violet-400', name: 'Orchestrator' },
     planner: { icon: <Cpu size={14} />, color: 'text-blue-400', name: 'Planner' },
-    coder: { icon: <Code2 size={14} />, color: 'text-cyan-400', name: 'Code Generator' },
+    coder: { icon: <Code2 size={14} />, color: 'text-cyan-400', name: 'Synthesizer' },
     refactor: { icon: <Wand2 size={14} />, color: 'text-amber-400', name: 'Refactor Agent' },
     preview: { icon: <Eye size={14} />, color: 'text-emerald-400', name: 'Preview Generator' },
     debug: { icon: <Bug size={14} />, color: 'text-red-400', name: 'Debug Agent' },
+    intent_analyst: { icon: <Activity size={12} />, color: 'text-orange-400', name: 'Intent Analyst' },
+    design_system: { icon: <Activity size={12} />, color: 'text-pink-400', name: 'Design System' },
+    copywriter: { icon: <Activity size={12} />, color: 'text-yellow-400', name: 'Copywriter' },
+    seo_strategist: { icon: <Activity size={12} />, color: 'text-emerald-400', name: 'SEO Strategist' },
+    accessibility: { icon: <Activity size={12} />, color: 'text-blue-400', name: 'A11y Auditor' },
+    performance: { icon: <Activity size={12} />, color: 'text-indigo-400', name: 'Perf Optimizer' },
+    component_lib: { icon: <Activity size={12} />, color: 'text-cyan-400', name: 'Component Lab' },
+    animation: { icon: <Activity size={12} />, color: 'text-purple-400', name: 'Motion Director' },
 }
 
 export default function AgentProgress({
@@ -179,10 +187,16 @@ export default function AgentProgress({
                                 </div>
 
                                 <div className="flex -space-x-2">
-                                    {['orchestrator', 'planner', 'coder'].map((agent) => (
-                                        <div key={agent} className={`w-6 h-6 rounded-full border border-[#0B0F19] bg-white/[0.03] flex items-center justify-center ${AGENT_META[agent].color} bg-black/40 backdrop-blur-xl shadow-lg ring-1 ring-white/10`}>
-                                            {AGENT_META[agent].icon}
-                                        </div>
+                                    {Array.from(new Set(thoughts.map(t => t.agent))).map((agent) => (
+                                        <motion.div 
+                                            initial={{ scale: 0, x: 10 }}
+                                            animate={{ scale: 1, x: 0 }}
+                                            key={agent} 
+                                            className={`w-6 h-6 rounded-full border border-[#0B0F19] bg-white/[0.03] flex items-center justify-center ${AGENT_META[agent]?.color || 'text-white/40'} bg-black/40 backdrop-blur-xl shadow-lg ring-1 ring-white/10`}
+                                            title={AGENT_META[agent]?.name}
+                                        >
+                                            {AGENT_META[agent]?.icon || <Brain size={12} />}
+                                        </motion.div>
                                     ))}
                                 </div>
                             </div>

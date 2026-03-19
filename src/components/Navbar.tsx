@@ -6,8 +6,9 @@ import { useRouter } from 'next/navigation'
 import { Zap, Menu, X, ChevronDown } from 'lucide-react'
 
 const navLinks = [
-    { label: 'Features', href: '/#features' },
-    { label: 'Pricing', href: '/#pricing' },
+    { label: 'Features', href: '/features' },
+    { label: 'Showcase', href: '/showcase' },
+    { label: 'Pricing', href: '/pricing' },
     { label: 'Dashboard', href: '/dashboard' },
 ]
 

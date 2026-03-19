@@ -110,11 +110,12 @@ export default function DashboardPage() {
                                         <motion.div
                                             key={p.id}
                                             layout
-                                            initial={{ opacity: 0, scale: 0.9 }}
-                                            animate={{ opacity: 1, scale: 1 }}
+                                            initial={{ opacity: 0, scale: 0.9, rotateX: 10 }}
+                                            animate={{ opacity: 1, scale: 1, rotateX: 0 }}
                                             exit={{ opacity: 0, scale: 0.9 }}
+                                            whileHover={{ y: -8, scale: 1.02, rotateX: 2, rotateY: -2 }}
                                             onClick={() => router.push(`/project/${p.id}`)}
-                                            className="glass-card group overflow-hidden cursor-pointer transition-all duration-500 hover:border-orange-500/40 relative bg-white/[0.02] border-white/5 flex flex-col h-full"
+                                            className="glass-card group overflow-hidden cursor-pointer transition-all duration-500 hover:border-orange-500/40 relative bg-white/[0.02] border-white/5 flex flex-col h-full shadow-[0_0_0_transparent] hover:shadow-[0_20px_40px_rgba(255,92,0,0.15)] will-change-transform"
                                         >
                                             {/* Preview Image / Thumbnail */}
                                             <div className="h-36 bg-white/[0.03] relative overflow-hidden border-b border-white/5">

@@ -8,11 +8,13 @@ import CodeViewer from '@/components/editor/CodeViewer'
 import CodePreview from '@/components/preview/CodePreview'
 import WorkspaceToolbar from '@/components/preview/WorkspaceToolbar'
 import AgentProgress, { type AgentPhase, type AgentStatus } from '@/components/chat/AgentProgress'
+import ProjectQuiz from '@/components/ProjectQuiz'
 import type { ChatMessage } from '@/types'
 import { mergeFiles, isRefactorRequest } from '@/lib/agent'
 import { ProjectDatabase, type Project } from '@/lib/db'
 import { Zap } from 'lucide-react'
 import { downloadProjectZip } from '@/lib/export'
+import { EditorSidebar } from '@/components/editor/EditorSidebar'
 
 function WorkspaceContent() {
     const params = useParams()
@@ -35,6 +37,8 @@ function WorkspaceContent() {
     const [hasLoadedState, setHasLoadedState] = useState(false)
     const [showAgentProgress, setShowAgentProgress] = useState(false)
     const [isResizing, setIsResizing] = useState(false)
+    const [showQuiz, setShowQuiz] = useState(false)
+    const [quizPrompt, setQuizPrompt] = useState('')
 
     // Agent progress state
     const [agentPhases, setAgentPhases] = useState<AgentPhase[]>([])
@@ -327,10 +331,12 @@ function WorkspaceContent() {
         setError(null)
     }, [])
 
-    // Auto-trigger if prompt is in URL (only after state has loaded)
+    // Auto-trigger: show quiz if there's a prompt and no existing project
     useEffect(() => {
         if (hasLoadedState && initialPrompt && messages.length === 0 && !generatedCode) {
-            generateCode(decodeURIComponent(initialPrompt))
+            const decoded = decodeURIComponent(initialPrompt)
+            setQuizPrompt(decoded)
+            setShowQuiz(true)
         }
     }, [hasLoadedState, initialPrompt]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -396,6 +402,22 @@ function WorkspaceContent() {
 
     return (
         <div className={`flex h-screen bg-[#0B0F19] overflow-hidden relative ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
+
+            {/* ── PROJECT QUIZ OVERLAY ─────────────────────────────────── */}
+            {showQuiz && quizPrompt && (
+                <ProjectQuiz
+                    initialPrompt={quizPrompt}
+                    onComplete={(enhancedPrompt, answers, palette) => {
+                        setShowQuiz(false)
+                        generateCode(enhancedPrompt, true)
+                    }}
+                    onSkip={() => {
+                        setShowQuiz(false)
+                        generateCode(quizPrompt, true)
+                    }}
+                />
+            )}
+
             {/* Ambient background glows */}
             <div className="absolute top-0 right-0 w-[50%] h-[40%] bg-blue-600/5 blur-[120px] rounded-full pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-[40%] h-[50%] bg-orange-600/5 blur-[100px] rounded-full pointer-events-none" />
@@ -428,6 +450,9 @@ function WorkspaceContent() {
                 />
 
                 <div className="flex-1 flex overflow-hidden relative">
+                    {/* EDITOR SIDEBAR: Tools & Image Picker */}
+                    <EditorSidebar />
+
                     {/* LEFT PARTIE: Monaco Editor (Flex basis: splitRatio) */}
                     <div
                         className="flex flex-col border-r border-vibe-border-subtle overflow-hidden"

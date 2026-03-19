@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
 import { Plus, Paperclip, Zap, Figma, Github, Sparkles, Send, Terminal, Layout, Layers, ShieldCheck } from 'lucide-react'
 
 const SUGGESTIONS = [
@@ -21,6 +21,12 @@ export default function HeroPrompt() {
     const [activeSuggestion, setActiveSuggestion] = useState(0)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const router = useRouter()
+
+    // Add scroll parallax
+    const { scrollY } = useScroll()
+    const yHeroText = useTransform(scrollY, [0, 500], [0, 150])
+    const yHeroImg = useTransform(scrollY, [0, 500], [0, 50])
+    const opacityHero = useTransform(scrollY, [0, 300], [1, 0])
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -54,17 +60,27 @@ export default function HeroPrompt() {
     }
 
     return (
-        <section className="relative min-h-[90vh] flex flex-col items-center justify-center px-6 pt-20 pb-10 overflow-hidden">
-            {/* Elite Background Atmosphere */}
-            <div className="absolute inset-0 z-0 pointer-events-none">
-                <div className="absolute top-[-10%] left-[-5%] w-[50%] h-[60%] bg-orange-500/10 blur-[140px] rounded-full opacity-60 animate-pulse" />
-                <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[50%] bg-blue-600/10 blur-[120px] rounded-full opacity-50 animate-pulse delay-700" />
-                <div className="absolute top-[20%] right-[10%] w-[30%] h-[40%] bg-purple-600/5 blur-[100px] rounded-full opacity-40 animate-pulse delay-1000" />
+        <section className="relative min-h-[95vh] flex flex-col items-center justify-center px-6 pt-20 pb-10 overflow-hidden">
+            {/* Elite Background Atmosphere with 3D Graphic */}
+            <div className="absolute inset-0 z-0 pointer-events-none flex justify-center overflow-hidden">
+                <motion.div style={{ y: yHeroImg, opacity: opacityHero }} className="absolute inset-0 flex items-center justify-center mix-blend-screen opacity-50">
+                    <img
+                        src="/images/hero-3d.png"
+                        alt="Abstract 3D Shape"
+                        className="w-[900px] h-[900px] object-cover scale-110"
+                    />
+                </motion.div>
+                <div className="absolute top-[10%] left-[-10%] w-[60%] h-[70%] bg-orange-500/15 blur-[140px] rounded-full opacity-60 animate-pulse mix-blend-screen" />
+                <div className="absolute bottom-[0%] right-[-10%] w-[50%] h-[60%] bg-blue-600/15 blur-[120px] rounded-full opacity-50 animate-pulse delay-700 mix-blend-screen" />
                 {/* Grid utility */}
                 <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0B0F19] via-[#0B0F19]/20 to-transparent" />
             </div>
 
-            <div className="relative z-10 max-w-4xl w-full text-center space-y-8">
+            <motion.div
+                style={{ y: yHeroText, opacity: opacityHero }}
+                className="relative z-10 max-w-4xl w-full text-center space-y-8"
+            >
                 {/* Animated Badge */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -209,7 +225,7 @@ export default function HeroPrompt() {
                         </button>
                     ))}
                 </motion.div>
-            </div>
+            </motion.div>
 
             {/* Floating feature indicators (Visual Depth) */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">

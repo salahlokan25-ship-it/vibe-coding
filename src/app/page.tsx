@@ -1,7 +1,5 @@
 import Navbar from '@/components/Navbar'
 import HeroPrompt from '@/components/HeroPrompt'
-import Features from '@/components/landing/Features'
-import Pricing from '@/components/landing/Pricing'
 import BottomCTA from '@/components/landing/BottomCTA'
 import Footer from '@/components/Footer'
 
@@ -12,8 +10,6 @@ export default function HomePage() {
             <div className="pt-20">
                 <HeroPrompt />
             </div>
-            <Features />
-            <Pricing />
             <BottomCTA />
             <Footer />
         </main>

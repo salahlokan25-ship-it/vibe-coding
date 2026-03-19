@@ -10,51 +10,22 @@ import {
     REFACTOR_PROMPT,
     DEBUG_PROMPT,
     PREVIEW_GENERATOR_PROMPT,
+    specialistContextToPromptString,
 } from './prompts'
 import { PromptEnhancer } from './enhancer'
+import { IMAGE_INJECTION_PROMPT } from '../imagePromptInjector'
+export * from './types'
+import {
+    AgentRunnerOptions,
+    OrchestratorPlan,
+    PlannerOutput,
+    SpecialistContext
+} from './types'
 
 // ─────────────────────────────────────────────────────────────────
-//  Types
+//  AI Provider Logic
 // ─────────────────────────────────────────────────────────────────
-export interface OrchestratorPlan {
-    project_type: string
-    stack: string
-    features: string[]
-    has_backend: boolean
-    has_database: boolean
-    has_auth: boolean
-    file_plan: string[]
-    description: string
-}
-
-export interface FileArchitecture {
-    path: string
-    purpose: string
-    exports: string[]
-    imports: string[]
-}
-
-export interface PlannerOutput {
-    architecture: FileArchitecture[]
-    dependencies: {
-        production: string[]
-        devDependencies: string[]
-    }
-    design_tokens: {
-        primary_color: string
-        font: string
-        style: string
-    }
-}
-
-export interface AgentRunnerOptions {
-    geminiKey?: string
-    bytezKey?: string
-    kimiKey?: string
-    openaiKey?: string
-    groqKey?: string
-    preferredProvider?: 'gemini' | 'bytez' | 'kimi' | 'openai' | 'groq'
-}
+// Types have been moved to src/lib/agents/types.ts
 
 // ─────────────────────────────────────────────────────────────────
 //  Core: Call any OpenAI-compatible or Gemini endpoint
@@ -70,7 +41,45 @@ export async function callLLM(
 ): Promise<string> {
     const providers = []
 
-    // 1. Kimi (Prioritized - High RPM)
+    // 1. Gemini (Primary - High Reasoning & Multi-modal)
+    if (opts.geminiKey) {
+        providers.push({
+            name: 'gemini',
+            call: () => callGemini(opts.geminiKey!, systemPrompt, userMessage)
+        })
+    }
+
+    // 2. DeepSeek via ByteZ (Elite Intelligence)
+    if (opts.bytezKey) {
+        providers.push({
+            name: 'bytez',
+            call: () => callOpenAICompatible(
+                'https://api.bytez.com/v1',
+                'deepseek-ai/DeepSeek-V3',
+                opts.bytezKey!,
+                systemPrompt,
+                userMessage,
+                16384 // DeepSeek handles large files well
+            )
+        })
+    }
+
+    // 3. Groq (Fast & Smart - Llama 3.3 70B)
+    if (opts.groqKey) {
+        providers.push({
+            name: 'groq',
+            call: () => callOpenAICompatible(
+                'https://api.groq.com/openai/v1',
+                'llama-3.3-70b-versatile',
+                opts.groqKey!,
+                systemPrompt,
+                userMessage,
+                16384
+            )
+        })
+    }
+
+    // 4. Kimi (Prioritized - High RPM Fallback)
     if (opts.kimiKey) {
         providers.push({
             name: 'kimi',
@@ -81,42 +90,6 @@ export async function callLLM(
                 systemPrompt,
                 userMessage
             )
-        })
-    }
-
-    // 2. DeepSeek via ByteZ
-    if (opts.bytezKey) {
-        providers.push({
-            name: 'bytez',
-            call: () => callOpenAICompatible(
-                'https://api.bytez.com/v1',
-                'deepseek-ai/DeepSeek-V3',
-                opts.bytezKey!,
-                systemPrompt,
-                userMessage
-            )
-        })
-    }
-
-    // 3. Groq (if key exists)
-    if (opts.groqKey) {
-        providers.push({
-            name: 'groq',
-            call: () => callOpenAICompatible(
-                'https://api.groq.com/openai/v1',
-                'llama-3.3-70b-versatile',
-                opts.groqKey!,
-                systemPrompt,
-                userMessage
-            )
-        })
-    }
-
-    // 4. Gemini (Fallback - 5-10 RPM)
-    if (opts.geminiKey) {
-        providers.push({
-            name: 'gemini',
-            call: () => callGemini(opts.geminiKey!, systemPrompt, userMessage)
         })
     }
 
@@ -159,7 +132,8 @@ async function callOpenAICompatible(
     model: string,
     apiKey: string,
     systemPrompt: string,
-    userMessage: string
+    userMessage: string,
+    maxTokens: number = 8192
 ): Promise<string> {
     const res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
@@ -175,7 +149,7 @@ async function callOpenAICompatible(
             ],
             stream: false,
             temperature: 0.1,
-            max_tokens: 8192,
+            max_tokens: maxTokens,
         }),
     })
 
@@ -198,9 +172,9 @@ async function callGemini(
         const { GoogleGenerativeAI } = await import('@google/generative-ai')
         const genAI = new GoogleGenerativeAI(apiKey)
 
-        // Use 1.5-flash-8b as it has a higher RPM (10 vs 5) on free tier
+        // Use 1.5-flash as it has much higher reasoning for premium code generation
         const model = genAI.getGenerativeModel({
-            model: 'gemini-1.5-flash-8b',
+            model: 'gemini-1.5-flash',
             systemInstruction: systemPrompt,
         })
 
@@ -289,8 +263,10 @@ User's Original Request:
             },
             design_tokens: {
                 primary_color: '#6366f1',
-                font: 'Inter',
+                background: '#020617',
+                accent_gradient: 'from-indigo-500 to-purple-500',
                 style: 'glassmorphism dark',
+                font: 'Inter',
             },
         }
     }
@@ -305,8 +281,11 @@ export async function runCodeGenerator(
     plannerOutput: PlannerOutput,
     orchestratorPlan: OrchestratorPlan,
     userPrompt: string,
-    opts: AgentRunnerOptions
+    opts: AgentRunnerOptions,
+    specialistCtx: SpecialistContext | null = null
 ): Promise<string> {
+    const specialistIntelligence = specialistCtx ? specialistContextToPromptString(specialistCtx) : ''
+
     const input = `
 FILE TO GENERATE:
 Path: ${filePath}
@@ -324,10 +303,13 @@ ${plannerOutput.architecture.map(f => `- ${f.path}: ${f.purpose}`).join('\n')}
 USER'S ORIGINAL REQUEST:
 "${userPrompt}"
 
+${specialistIntelligence}
+
 Generate ONLY the complete content for: ${filePath}
 `.trim()
 
-    return callLLM(CODE_GENERATOR_PROMPT, input, opts)
+    const systemPrompt = CODE_GENERATOR_PROMPT + '\n' + IMAGE_INJECTION_PROMPT
+    return callLLM(systemPrompt, input, opts)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -337,20 +319,28 @@ export async function runRefactorAgent(
     filePath: string,
     currentContent: string,
     modification: string,
-    opts: AgentRunnerOptions
+    opts: AgentRunnerOptions,
+    history: Array<{ role: string; content: string }> = []
 ): Promise<string> {
+    // Build a concise chat history context (last 6 messages)
+    const recentHistory = history.slice(-6)
+    const historyCtx = recentHistory.length > 0
+        ? `\n\nCONVERSATION HISTORY (for context — respect previous decisions):\n${recentHistory.map(m => `[${m.role.toUpperCase()}]: ${m.content.slice(0, 300)}`).join('\n')}\n`
+        : ''
+
     const input = `
 FILE PATH: ${filePath}
 
 CURRENT FILE CONTENT:
 ${currentContent}
-
+${historyCtx}
 MODIFICATION INSTRUCTION:
 "${modification}"
 `.trim()
 
     return callLLM(REFACTOR_PROMPT, input, opts)
 }
+
 
 // ─────────────────────────────────────────────────────────────────
 //  AGENT 5: Debug Agent

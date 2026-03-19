@@ -20,26 +20,36 @@ export async function middleware(request: NextRequest) {
         supabaseKey,
         {
             cookies: {
-                getAll() {
-                    return request.cookies.getAll()
+                get(name: string) {
+                    return request.cookies.get(name)?.value
                 },
-                setAll(cookiesToSet: any[]) {
-                    cookiesToSet.forEach(({ name, value, options }) =>
-                        request.cookies.set(name, value)
-                    )
+                set(name: string, value: string, options: any) {
+                    request.cookies.set({ name, value, ...options })
                     supabaseResponse = NextResponse.next({
-                        request,
+                        request: {
+                            headers: request.headers,
+                        },
                     })
-                    cookiesToSet.forEach(({ name, value, options }) =>
-                        supabaseResponse.cookies.set(name, value, options)
-                    )
+                    supabaseResponse.cookies.set({ name, value, ...options })
+                },
+                remove(name: string, options: any) {
+                    request.cookies.set({ name, value: '', ...options })
+                    supabaseResponse = NextResponse.next({
+                        request: {
+                            headers: request.headers,
+                        },
+                    })
+                    supabaseResponse.cookies.set({ name, value: '', ...options })
                 },
             },
         }
     )
 
     // Ensure session exists
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error } = await supabase.auth.getUser()
+
+    console.log(`[Middleware] Path: ${request.nextUrl.pathname}, User ID: ${user?.id || 'null'}, Error: ${error?.message || 'none'}`)
+    console.log(`[Middleware] Cookies present:`, request.cookies.getAll().map(c => c.name).join(', '))
 
     // Only the dashboard requires authentication — /project/ is freely accessible
     const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard')
