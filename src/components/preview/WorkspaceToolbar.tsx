@@ -12,8 +12,10 @@ interface WorkspaceToolbarProps {
     onDeviceChange: (device: 'desktop' | 'tablet' | 'mobile') => void
     onExport?: () => void
     onRename?: (newName: string) => void
-    isStitch?: boolean
-    isKimi?: boolean
+    onFixError?: () => void
+    hasError?: boolean
+    isGenerating?: boolean
+    extraActions?: React.ReactNode
 }
 
 export default function WorkspaceToolbar({
@@ -24,8 +26,10 @@ export default function WorkspaceToolbar({
     onDeviceChange,
     onExport,
     onRename,
-    isStitch = false,
-    isKimi = false,
+    onFixError,
+    hasError = false,
+    isGenerating = false,
+    extraActions,
 }: WorkspaceToolbarProps) {
     const [isEditing, setIsEditing] = useState(false)
     const [tempName, setTempName] = useState(projectName)
@@ -98,17 +102,6 @@ export default function WorkspaceToolbar({
                     </AnimatePresence>
                 </div>
 
-                {/* AI Model Badge */}
-                <div className="hidden lg:block">
-                    <button className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all ${isKimi ? 'bg-purple-500/10 border-purple-500/30 text-purple-400' :
-                        isStitch ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' :
-                            'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                        }`}>
-                        <Sparkles size={12} className="animate-pulse" />
-                        <span>{isKimi ? 'Kimi K2.5' : isStitch ? 'Stitch Multi-Agent' : 'Gemini 1.5 Pro'}</span>
-                        <ChevronDown size={10} className="ml-1 opacity-40" />
-                    </button>
-                </div>
             </div>
 
             {/* Device Selection Center */}
@@ -137,16 +130,35 @@ export default function WorkspaceToolbar({
             {/* Right Actions */}
             <div className="flex items-center gap-3">
                 {/* URL Bar (Mini) */}
-                <div className="hidden xl:flex items-center gap-3 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[11px] font-medium text-white/30 max-w-[280px]">
+                <div className="hidden xl:flex items-center gap-3 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[11px] font-medium text-white/30 max-w-[340px]">
                     <Globe size={13} className="shrink-0 text-white/20" />
                     <span className="truncate tracking-tight font-bold">{previewUrl?.replace('https://', '') || 'preview.buildai.app/preview'}</span>
-                    <button
-                        onClick={onRefresh}
-                        className="p-1 rounded-lg hover:bg-white/10 text-white/20 hover:text-white transition-all shrink-0"
-                        title="Refresh View"
-                    >
-                        <RefreshCw size={12} />
-                    </button>
+                    <div className="flex items-center gap-1.5 ml-1">
+                        <button
+                            onClick={onRefresh}
+                            className="p-1.5 rounded-lg hover:bg-white/10 text-white/20 hover:text-white transition-all shrink-0"
+                            title="Refresh View"
+                        >
+                            <RefreshCw size={11} />
+                        </button>
+                        {onFixError && (
+                            <button
+                                onClick={onFixError}
+                                disabled={isGenerating}
+                                className={`group/fix flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all shrink-0 disabled:opacity-30 disabled:pointer-events-none ${hasError
+                                    ? 'bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.5)] animate-pulse'
+                                    : 'bg-red-500/5 hover:bg-red-500/20 text-red-400/50 hover:text-red-400 border border-red-500/10 hover:border-red-500/30'
+                                    }`}
+                                title={hasError ? "CRITICAL: Repair Detected Errors" : "Fix Preview Errors"}
+                            >
+                                <Lock size={10} className={hasError ? 'hidden' : 'group-hover/fix:hidden text-white/20'} />
+                                <div className={hasError ? 'block' : 'hidden group-hover/fix:block'}>
+                                    <Rocket size={10} className="animate-bounce" />
+                                </div>
+                                <span className="text-[9px] font-bold uppercase tracking-wider">{hasError ? 'Fix Crash Now' : 'Fix Error'}</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="h-6 w-px bg-white/10 mx-1" />
@@ -165,15 +177,8 @@ export default function WorkspaceToolbar({
                         </motion.button>
                     )}
 
-                    <motion.button
-                        whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(255,92,0,0.3)' }}
-                        whileTap={{ scale: 0.95 }}
-                        className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold text-[10px] uppercase tracking-[0.2em] px-5 py-2.5 rounded-xl shadow-xl transition-all"
-                        id="deploy-btn"
-                    >
-                        <Rocket size={14} className="fill-white" />
-                        <span className="hidden sm:inline">Ship App</span>
-                    </motion.button>
+                    {/* Extra Actions (e.g. Deploy Button) */}
+                    {extraActions}
                 </div>
             </div>
         </header>

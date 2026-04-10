@@ -1,0 +1,77 @@
+[2026-04-09T13:57:01.299Z] [AI] Calling groq
+[2026-04-09T13:57:01.593Z] [AI ERROR] groq: llama-3.3-70b-versatile failed: Too Many Requests
+[2026-04-09T13:57:02.154Z] [AI] Calling groq
+[2026-04-09T13:57:02.340Z] [AI ERROR] groq: llama-3.3-70b-versatile failed: Too Many Requests
+[2026-04-09T13:57:06.176Z] [AI] Calling gemini
+[2026-04-09T13:57:06.764Z] [AI ERROR] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [400 Bad Request] API Key not found. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API Key not found. Please pass a valid API key."}]
+[2026-04-09T13:57:06.808Z] [AI] Calling bytez
+[2026-04-09T13:57:07.163Z] [AI] Calling gemini
+[2026-04-09T13:57:07.769Z] [AI ERROR] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [400 Bad Request] API Key not found. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API Key not found. Please pass a valid API key."}]
+[2026-04-09T13:57:07.824Z] [AI] Calling bytez
+[2026-04-09T13:57:08.212Z] [AI ERROR] bytez: deepseek-ai/DeepSeek-V3 failed: Internal Server Error
+[2026-04-09T13:57:08.269Z] [AI] Calling kimi
+[2026-04-09T13:57:08.778Z] [AI ERROR] bytez: deepseek-ai/DeepSeek-V3 failed: Internal Server Error
+[2026-04-09T13:57:08.836Z] [AI] Calling kimi
+[2026-04-09T13:57:16.108Z] [AI] kimi success
+[2026-04-09T13:57:47.339Z] [AI] kimi success
+[2026-04-09T13:57:59.234Z] [AI] kimi success
+[2026-04-09T13:58:08.189Z] [AI] kimi success
+[2026-04-09T13:58:11.554Z] [AI] kimi success
+[2026-04-09T13:58:25.185Z] [AI] kimi success
+[2026-04-09T13:58:32.352Z] [AI] kimi success
+[2026-04-09T13:58:36.414Z] [AI] Calling groq
+[2026-04-09T13:58:36.997Z] [AI ERROR] groq: llama-3.3-70b-versatile failed: Too Many Requests
+[2026-04-09T13:58:41.329Z] [AI] Calling gemini
+[2026-04-09T13:58:44.253Z] [AI] kimi success
+[2026-04-09T13:58:44.480Z] [AI] Calling groq
+[2026-04-09T13:58:44.525Z] [AI] Calling groq
+[2026-04-09T13:58:44.548Z] [AI] Calling groq
+[2026-04-09T13:58:44.570Z] [AI] Calling groq
+[2026-04-09T13:58:45.416Z] [AI ERROR] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [400 Bad Request] API Key not found. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API Key not found. Please pass a valid API key."}]
+[2026-04-09T13:58:45.458Z] [AI] Calling bytez
+[2026-04-09T13:58:46.338Z] [AI ERROR] groq: llama-3.3-70b-versatile failed: Too Many Requests
+[2026-04-09T13:58:47.141Z] [AI ERROR] groq: llama-3.3-70b-versatile failed: Too Many Requests
+[2026-04-09T13:58:47.181Z] [AI ERROR] groq: llama-3.3-70b-versatile failed: Too Many Requests
+[2026-04-09T13:58:47.267Z] [AI ERROR] bytez: deepseek-ai/DeepSeek-V3 failed: Internal Server Error
+[2026-04-09T13:58:47.281Z] [AI] Calling kimi
+[2026-04-09T13:58:48.009Z] [AI ERROR] groq: llama-3.3-70b-versatile failed: Too Many Requests
+[2026-04-09T13:58:53.251Z] [AI] Calling gemini
+[2026-04-09T13:58:53.551Z] [AI] Calling gemini
+[2026-04-09T13:58:54.119Z] [AI] Calling gemini
+[2026-04-09T13:58:54.492Z] [AI] Calling gemini
+[2026-04-09T13:58:55.402Z] [AI ERROR] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [400 Bad Request] API Key not found. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API Key not found. Please pass a valid API key."}]
+[2026-04-09T13:58:55.448Z] [AI] Calling bytez
+[2026-04-09T13:58:57.248Z] [AI ERROR] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [400 Bad Request] API Key not found. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API Key not found. Please pass a valid API key."}]
+[2026-04-09T13:58:57.303Z] [AI] Calling bytez
+[2026-04-09T13:58:57.324Z] [AI ERROR] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [400 Bad Request] API Key not found. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API Key not found. Please pass a valid API key."}]
+[2026-04-09T13:58:57.348Z] [AI] Calling bytez
+[2026-04-09T13:58:58.292Z] [AI ERROR] bytez: deepseek-ai/DeepSeek-V3 failed: Internal Server Error
+[2026-04-09T13:58:58.336Z] [AI] Calling kimi
+[2026-04-09T13:58:58.551Z] [AI ERROR] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [400 Bad Request] API Key not found. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API Key not found. Please pass a valid API key."}]
+[2026-04-09T13:58:58.592Z] [AI] Calling bytez
+[2026-04-09T13:58:58.886Z] [AI ERROR] bytez: deepseek-ai/DeepSeek-V3 failed: Internal Server Error
+[2026-04-09T13:58:58.937Z] [AI] Calling kimi
+[2026-04-09T13:58:59.782Z] [AI ERROR] bytez: deepseek-ai/DeepSeek-V3 failed: Internal Server Error
+[2026-04-09T13:58:59.825Z] [AI] Calling kimi
+[2026-04-09T13:59:00.714Z] [AI ERROR] bytez: deepseek-ai/DeepSeek-V3 failed: Internal Server Error
+[2026-04-09T13:59:00.736Z] [AI] Calling kimi
+[2026-04-09T13:59:03.519Z] [AI] kimi success
+[2026-04-09T13:59:03.593Z] [AI] Calling groq
+[2026-04-09T13:59:05.233Z] [AI ERROR] groq: llama-3.3-70b-versatile failed: Too Many Requests
+[2026-04-09T13:59:09.548Z] [AI] Calling gemini
+[2026-04-09T13:59:10.155Z] [AI ERROR] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [400 Bad Request] API Key not found. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API Key not found. Please pass a valid API key."}]
+[2026-04-09T13:59:10.207Z] [AI] Calling bytez
+[2026-04-09T13:59:16.327Z] [AI ERROR] bytez: deepseek-ai/DeepSeek-V3 failed: Internal Server Error
+[2026-04-09T13:59:16.392Z] [AI] Calling kimi
+[2026-04-09T14:00:52.719Z] [AI] kimi success
+[2026-04-09T14:01:21.907Z] [AI] kimi success
+[2026-04-09T14:01:33.879Z] [AI] kimi success
+[2026-04-09T14:01:40.474Z] [AI] Calling groq
+[2026-04-09T14:01:41.731Z] [AI] kimi success
+[2026-04-09T14:01:42.102Z] [AI ERROR] groq: llama-3.3-70b-versatile failed: Too Many Requests
+[2026-04-09T14:01:47.068Z] [AI] Calling gemini
+[2026-04-09T14:01:47.121Z] [AI] kimi success
+[2026-04-09T14:01:48.511Z] [AI ERROR] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [400 Bad Request] API Key not found. Please pass a valid API key. [{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com","metadata":{"service":"generativelanguage.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API Key not found. Please pass a valid API key."}]
+[2026-04-09T14:01:48.541Z] [AI] Calling bytez
+[2026-04-09T14:01:50.858Z] [AI ERROR] bytez: deepseek-ai/DeepSeek-V3 failed: Internal Server Error
+[2026-04-09T14:01:50.908Z] [AI] Calling kimi

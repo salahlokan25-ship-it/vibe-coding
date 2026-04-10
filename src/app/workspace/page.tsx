@@ -3,19 +3,37 @@
 import { useState, useEffect, useCallback, Suspense, useMemo } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { Database } from 'lucide-react'
 import ChatPanel from '@/components/chat/ChatPanel'
+import { AIModel } from '@/components/ModelSelector'
 import CodeViewer from '@/components/editor/CodeViewer'
 import CodePreview from '@/components/preview/CodePreview'
 import WorkspaceToolbar from '@/components/preview/WorkspaceToolbar'
 import AgentProgress, { type AgentPhase, type AgentStatus } from '@/components/chat/AgentProgress'
 import type { ChatMessage } from '@/types'
 import { mergeFiles, ProjectStateManager } from '@/lib/agent'
+import VersionHistoryPanel from '@/components/VersionHistoryPanel'
+import DatabaseModal from '@/components/database/DatabaseModal'
+import DeployButton from '@/components/DeployButton'
+import PlanMode from '@/components/PlanMode'
+import { VersionHistory } from '@/lib/version-history'
 
 function WorkspaceContent() {
     const searchParams = useSearchParams()
     const initialPrompt = searchParams.get('prompt') || ''
-    const useStitch = searchParams.get('stitch') === 'true'
-    const useKimi = searchParams.get('kimi') === 'true'
+    const [selectedModel, setSelectedModel] = useState<AIModel>('groq')
+
+    useEffect(() => {
+        const model = searchParams.get('model') as AIModel
+        const kimi = searchParams.get('kimi') === 'true'
+        const groq = searchParams.get('groq') === 'true'
+        const stitch = searchParams.get('stitch') === 'true'
+
+        if (model) setSelectedModel(model)
+        else if (kimi) setSelectedModel('kimi')
+        else if (groq) setSelectedModel('groq')
+        else if (stitch) setSelectedModel('auto')
+    }, [searchParams])
 
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [generatedCode, setGeneratedCode] = useState('')
@@ -27,7 +45,15 @@ function WorkspaceContent() {
     const [splitRatio] = useState(55)
     const [chatWidth] = useState(420)
     const [activeFilePath, setActiveFilePath] = useState<string | null>(null)
+    const [refreshKey, setRefreshKey] = useState(0)
+    const [showVersionHistory, setShowVersionHistory] = useState(false)
+    const [showDatabaseModal, setShowDatabaseModal] = useState(false)
+    const [projectId] = useState(() => searchParams.get('id') || crypto.randomUUID())
 
+    // Vibe Select & Auto-Heal State
+    const [isSelectionMode, setIsSelectionMode] = useState(false)
+    const [vibeContext, setVibeContext] = useState<{ tagName: string, selector: string, text: string, htmlContext: string } | null>(null)
+    const [autoHealCount, setAutoHealCount] = useState(0)
 
     // Agent progress state
     const [agentPhases, setAgentPhases] = useState<AgentPhase[]>([])
@@ -46,7 +72,7 @@ function WorkspaceContent() {
     }, [])
 
     const generateCode = useCallback(
-        async (prompt: string, forceNew = false) => {
+        async (prompt: string, forceNew = false, attachedImage?: string) => {
             setIsGenerating(true)
             setError(null)
             setAgentPhases([])
@@ -55,7 +81,7 @@ function WorkspaceContent() {
             setAgentFiles([])
             setAgentPlan(null)
 
-            const provider = useKimi ? 'kimi' : useStitch ? 'bytez' : 'gemini'
+            const provider = selectedModel === 'auto' ? 'groq' : selectedModel
 
             const userMsg: ChatMessage = {
                 id: crypto.randomUUID(),
@@ -85,6 +111,7 @@ function WorkspaceContent() {
                         existingFiles: projectFiles,
                         forceNew,
                         provider,
+                        imageContext: attachedImage,
                     }),
                 })
 
@@ -135,11 +162,13 @@ function WorkspaceContent() {
                                     )
                                     // Stream code progressively
                                     const partialRaw = Object.entries(localFiles)
-                                        .map(([p, c]) => `<file path="${p}">
-${c}
-</file>`)
+                                        .map(([p, c]) => `<file path="${p}">\n${c}\n</file>`)
                                         .join('\n\n')
                                     setGeneratedCode(partialRaw)
+                                    // Progressive preview: refresh when preview.html arrives or every 3 files
+                                    if (payload.path.endsWith('.html') || Object.keys(localFiles).length % 3 === 0) {
+                                        setRefreshKey(prev => prev + 1)
+                                    }
                                 }
 
                                 if (type === 'complete') {
@@ -152,6 +181,7 @@ ${c}
                                     setGeneratedCode(rawCode)
                                     setAgentStatus('done')
                                     setIsRefactoring(mode === 'refactor')
+                                    setRefreshKey(prev => prev + 1)
 
                                     ProjectStateManager.save({
                                         plan: null,
@@ -162,6 +192,16 @@ ${c}
                                         ],
                                         buildErrors: [],
                                         lastGeneratedCode: rawCode,
+                                    })
+
+                                    // 🔖 Auto-save a Version History Checkpoint
+                                    VersionHistory.save(projectId, {
+                                        files: merged,
+                                        generatedCode: rawCode,
+                                        prompt,
+                                        label: mode === 'refactor'
+                                            ? `Refactor • ${new Date().toLocaleTimeString()}`
+                                            : `Build • ${fileCount} files • ${new Date().toLocaleTimeString()}`,
                                     })
 
                                     setMessages(prev => {
@@ -176,6 +216,9 @@ ${c}
                                             status: 'done' as const,
                                         }]
                                     })
+
+                                    // Instantly force preview reload without delays
+                                    setRefreshKey(prev => prev + 1)
                                 }
 
                                 if (type === 'error') {
@@ -185,8 +228,11 @@ ${c}
                                 if (type === 'fatal') {
                                     throw new Error(payload.message)
                                 }
-                            } catch (parseErr) {
-                                // skip malformed events
+                            } catch (parseErr: any) {
+                                // Only skip JSON parse errors, not fatal errors
+                                if (parseErr?.message && !parseErr.message.includes('JSON')) {
+                                    throw parseErr
+                                }
                             }
                         }
                     }
@@ -210,7 +256,7 @@ ${c}
                 setIsRefactoring(false)
             }
         },
-        [messages, useStitch, useKimi, projectFiles]
+        [messages, selectedModel, projectFiles]
     )
 
     const handleNewProject = useCallback(() => {
@@ -227,16 +273,44 @@ ${c}
         }
     }, [initialPrompt, messages.length, generateCode])
 
+    // Listen for Vibe Select and Runtime Errors from the internal iframe
+    useEffect(() => {
+        const handleMessage = (e: MessageEvent) => {
+            if (e.data?.type === 'VIBE_ELEMENT_SELECTED') {
+                setVibeContext(e.data.payload)
+                setIsSelectionMode(false)
+            }
+            if (e.data?.type === 'PREVIEW_ERROR') {
+                const { message, line } = e.data.payload;
+                // Trigger auto-heal if we aren't already generating, and haven't looped out of control
+                if (!isGenerating && autoHealCount < 2) {
+                    console.log('🚑 Initiating Auto-Heal for:', message)
+                    setAutoHealCount(c => c + 1)
+                    setTimeout(() => {
+                        generateCode(`[SYS_AUTO_HEAL] 🚑 The preview just crashed in the browser with the following runtime error: "${message}" at approx line ${line}. Please analyze the codebase, identify exactly why this crashed, and provide the fix immediately. Do not break other functionality.`)
+                    }, 500)
+                }
+            }
+        }
+        window.addEventListener('message', handleMessage)
+        return () => window.removeEventListener('message', handleMessage)
+    }, [isGenerating, autoHealCount, generateCode])
 
-    const handleSendMessage = (content: string) => {
-        generateCode(content)
+
+    const handleSendMessage = (content: string, attachedImage?: string) => {
+        setAutoHealCount(0); // Reset auto-heal block on manual user prompt
+
+        let finalPrompt = content;
+        if (vibeContext) {
+            finalPrompt = `[TARGET ELEMENT: <${vibeContext.tagName} class="${vibeContext.selector}"> context: "${vibeContext.text}"]\nI am targeting this specific element. Apply my changes strategically to this element and its parent component.\n\nUser Request: ${content}`;
+            setVibeContext(null);
+        }
+        generateCode(finalPrompt, false, attachedImage)
     }
 
     const handleRefresh = () => {
         if (generatedCode) {
-            // Trigger a refresh by slightly updating a dummy state or forcing a re-render
-            setGeneratedCode((prev) => prev + ' ')
-            setTimeout(() => setGeneratedCode((prev) => prev.trimEnd()), 50)
+            setRefreshKey(prev => prev + 1)
         }
     }
 
@@ -287,6 +361,26 @@ ${c}
                                 Refactoring
                             </span>
                         )}
+                        {/* Database Link Button */}
+                        {Object.values(projectFiles).some((f: any) => typeof f === 'string' && (f.includes('CREATE TABLE') || f.includes('create table'))) && (
+                            <button
+                                onClick={() => setShowDatabaseModal(true)}
+                                className="text-[10px] font-bold uppercase tracking-wider text-vibe-accent-purple bg-vibe-accent-purple/10 border border-vibe-accent-purple/30 px-2 py-1 rounded-full hover:bg-vibe-accent-purple/20 transition-all flex items-center gap-1 shadow-[0_0_10px_rgba(168,85,247,0.2)]"
+                                title="Run SQL Migration"
+                            >
+                                <Database size={10} /> Execute DB
+                            </button>
+                        )}
+                        {/* Version History Button */}
+                        {Object.keys(projectFiles).length > 0 && (
+                            <button
+                                onClick={() => setShowVersionHistory(true)}
+                                className="text-[10px] font-bold uppercase tracking-wider text-white/40 bg-white/5 border border-white/10 px-2 py-1 rounded-full hover:text-white hover:bg-white/10 transition-all flex items-center gap-1"
+                                title="Version History"
+                            >
+                                ⏱ History
+                            </button>
+                        )}
                         {Object.keys(projectFiles).length > 0 && (
                             <button
                                 onClick={handleNewProject}
@@ -304,6 +398,8 @@ ${c}
                     generatedFiles={agentFiles}
                     status={agentStatus}
                     plan={agentPlan}
+                    error={error}
+                    selectedModel={selectedModel}
                 />
                 <ChatPanel
                     messages={messages}
@@ -311,6 +407,10 @@ ${c}
                     isGenerating={isGenerating}
                     generatingFiles={agentFiles}
                     currentPhaseLabel={currentPhase?.label}
+                    selectedModel={selectedModel}
+                    onModelChange={setSelectedModel}
+                    vibeContext={vibeContext}
+                    onClearVibeContext={() => { setVibeContext(null); setIsSelectionMode(false) }}
                 />
             </div>
 
@@ -321,8 +421,25 @@ ${c}
                     onRefresh={handleRefresh}
                     activeDevice={activeDevice}
                     onDeviceChange={setActiveDevice}
-                    isStitch={useStitch}
-                    isKimi={useKimi}
+                    extraActions={
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => { setIsSelectionMode(!isSelectionMode); setVibeContext(null); }}
+                                disabled={!generatedCode || isGenerating}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-l-xl border-r border-white/5 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ${isSelectionMode ? 'bg-orange-500/20 text-orange-400 border-orange-500/50 shadow-[0_0_15px_rgba(255,92,0,0.2)]' : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10 border border-white/5'} ${(!generatedCode || isGenerating) && 'opacity-50 cursor-not-allowed'}`}
+                                title="Hover & Click an element in preview to target it"
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>
+                                {isSelectionMode ? 'Select Element...' : 'Vibe Select'}
+                            </button>
+                            <DeployButton
+                                projectFiles={projectFiles}
+                                generatedCode={generatedCode}
+                                projectName="buildai-project"
+                                isGenerating={isGenerating}
+                            />
+                        </div>
+                    }
                 />
 
                 <div className="flex-1 flex overflow-hidden">
@@ -331,9 +448,9 @@ ${c}
                         style={{ flexBasis: `${splitRatio}%` }}
                     >
                         <div className="flex-1 bg-vibe-bg-tertiary flex items-center justify-center overflow-hidden p-4">
-                            <div className={`${previewWidth} h-full rounded-lg overflow-hidden border border-vibe-border-subtle shadow-card transition-all duration-300`}>
+                            <div className={`${previewWidth} h-full rounded-lg overflow-hidden border ${isSelectionMode ? 'border-orange-500 shadow-[0_0_30px_rgba(255,92,0,0.2)]' : 'border-vibe-border-subtle shadow-card'} transition-all duration-300`}>
                                 {generatedCode ? (
-                                    <CodePreview code={generatedCode} />
+                                    <CodePreview code={generatedCode} key={refreshKey} isSelectionMode={isSelectionMode} />
                                 ) : (
                                     <div className="w-full h-full bg-vibe-bg-primary flex flex-col items-center justify-center gap-4">
                                         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-vibe-accent-blue/10 to-vibe-accent-indigo/10 border border-vibe-border-subtle flex items-center justify-center">
@@ -358,7 +475,15 @@ ${c}
                         style={{ flexBasis: `${100 - splitRatio}%` }}
                     >
                         {generatedCode ? (
-                            <CodeViewer code={generatedCode} isGenerating={isGenerating} />
+                            <CodeViewer
+                                code={generatedCode}
+                                isGenerating={isGenerating}
+                                onChange={(newCode, newFiles) => {
+                                    setGeneratedCode(newCode)
+                                    setProjectFiles(newFiles)
+                                    // Not updating refreshKey immediately to avoid stuttering iframe
+                                }}
+                            />
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-vibe-bg-primary">
                                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-vibe-accent-indigo/10 to-vibe-accent-purple/10 border border-vibe-border-subtle flex items-center justify-center">
@@ -376,6 +501,25 @@ ${c}
                     </div>
                 </div>
             </div>
+
+            {/* Version History Panel (Portal) */}
+            <VersionHistoryPanel
+                projectId={projectId}
+                isOpen={showVersionHistory}
+                onClose={() => setShowVersionHistory(false)}
+                onRestore={(cp) => {
+                    setProjectFiles(cp.files)
+                    setGeneratedCode(cp.generatedCode)
+                    setRefreshKey(prev => prev + 1)
+                }}
+            />
+
+            {/* Database Runner Modal */}
+            <DatabaseModal
+                isOpen={showDatabaseModal}
+                onClose={() => setShowDatabaseModal(false)}
+                projectFiles={projectFiles}
+            />
         </div>
     )
 }

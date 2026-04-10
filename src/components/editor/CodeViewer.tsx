@@ -7,6 +7,7 @@ import Editor from '@monaco-editor/react'
 interface CodeViewerProps {
     code: string
     isGenerating?: boolean
+    onChange?: (newFullCode: string, filesMap: Record<string, string>) => void
 }
 
 interface ParsedFile {
@@ -51,13 +52,18 @@ function buildTree(files: ParsedFile[]): Record<string, ParsedFile[]> {
     return tree
 }
 
-export default function CodeViewer({ code, isGenerating }: CodeViewerProps) {
+export default function CodeViewer({ code, isGenerating, onChange }: CodeViewerProps) {
     const [activeFilePath, setActiveFilePath] = useState<string | null>(null)
     const [copied, setCopied] = useState(false)
-
     const [sidebarExpanded, setSidebarExpanded] = useState(true)
 
-    const files = useMemo(() => parseFiles(code), [code])
+    // Parse the file string whenever upstream code changes
+    const [files, setFiles] = useState<ParsedFile[]>([])
+
+    useEffect(() => {
+        setFiles(parseFiles(code))
+    }, [code])
+
     const tree = useMemo(() => buildTree(files), [files])
 
     // Auto-follow: Select newest file during generation
@@ -84,6 +90,28 @@ export default function CodeViewer({ code, isGenerating }: CodeViewerProps) {
         await navigator.clipboard.writeText(code)
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
+    }
+
+    const handleEditorChange = (newValue: string | undefined) => {
+        if (newValue === undefined || !activeFile) return
+
+        // Update local state first
+        const updatedFiles = files.map(f =>
+            f.path === activeFile.path ? { ...f, content: newValue } : f
+        )
+        setFiles(updatedFiles)
+
+        // Then propagate up
+        if (onChange) {
+            const reconstructedString = updatedFiles
+                .map(f => `<file path="${f.path}">\n${f.content}\n</file>`)
+                .join('\n\n')
+
+            const fileMap: Record<string, string> = {}
+            updatedFiles.forEach(f => fileMap[f.path] = f.content)
+
+            onChange(reconstructedString, fileMap)
+        }
     }
 
     if (!code || files.length === 0) {
@@ -194,8 +222,9 @@ export default function CodeViewer({ code, isGenerating }: CodeViewerProps) {
                                 language={activeFile.language}
                                 theme="vs-dark"
                                 value={activeFile.content}
+                                onChange={handleEditorChange}
                                 options={{
-                                    readOnly: true,
+                                    readOnly: isGenerating, // Only read-only while AI is typing
                                     minimap: { enabled: false },
                                     fontSize: 13,
                                     fontFamily: 'JetBrains Mono, Menlo, monospace',

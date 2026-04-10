@@ -34,10 +34,10 @@ export default function DashboardPage() {
         router.push(`/project/${id}`)
     }
 
-    const handlePromptSubmit = (prompt: string) => {
+    const handlePromptSubmit = (prompt: string, model: string) => {
         const id = crypto.randomUUID()
         const encoded = encodeURIComponent(prompt)
-        router.push(`/project/${id}?prompt=${encoded}`)
+        router.push(`/project/${id}?prompt=${encoded}&model=${model}`)
     }
 
     const handleDeleteProject = async (e: React.MouseEvent, projectId: string) => {
@@ -218,7 +218,7 @@ export default function DashboardPage() {
                         )}
                     </section>
 
-                    <TemplateGrid onSelectTemplate={handlePromptSubmit} />
+                    <TemplateGrid onSelectTemplate={(p) => handlePromptSubmit(p, 'auto')} />
                 </main>
 
                 <PromptBar onSubmit={handlePromptSubmit} />

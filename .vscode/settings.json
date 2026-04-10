@@ -7,6 +7,6 @@
         "typescript": "ts"
     },
     "files.associations": {
-        "*.css": "tailwindcss"
+        "*.css": "postcss"
     }
 }

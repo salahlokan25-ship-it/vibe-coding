@@ -2,20 +2,22 @@
 
 import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Sparkles, Send, Command } from 'lucide-react'
+import { Plus, Sparkles, Send, Command, ImageIcon } from 'lucide-react'
+import ModelSelector, { AIModel } from './ModelSelector'
 
 interface PromptBarProps {
-    onSubmit: (prompt: string) => void
+    onSubmit: (prompt: string, model: AIModel) => void
 }
 
 export default function PromptBar({ onSubmit }: PromptBarProps) {
     const [value, setValue] = useState('')
     const [isFocused, setIsFocused] = useState(false)
+    const [selectedModel, setSelectedModel] = useState<AIModel>('auto')
     const inputRef = useRef<HTMLInputElement>(null)
 
     const handleSubmit = () => {
         if (!value.trim()) return
-        onSubmit(value.trim())
+        onSubmit(value.trim(), selectedModel)
         setValue('')
     }
 
@@ -30,10 +32,16 @@ export default function PromptBar({ onSubmit }: PromptBarProps) {
                 <div className={`w-full flex items-center gap-4 bg-[#0b1120]/80 backdrop-blur-3xl border transition-all duration-500 rounded-2xl px-4 py-2.5 shadow-2xl ${isFocused ? 'border-orange-500/40 shadow-[0_0_40px_rgba(255,92,0,0.15)] ring-1 ring-orange-500/20' : 'border-white/[0.06]'}`}>
                     <button
                         className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/[0.03] border border-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all group shrink-0"
-                        title="New attachment"
+                        title="Upload context image"
                     >
-                        <Plus size={18} className="group-hover:rotate-90 transition-transform" />
+                        <ImageIcon size={18} className="group-hover:scale-110 transition-transform" />
                     </button>
+
+                    <ModelSelector
+                        selectedModel={selectedModel}
+                        onModelChange={setSelectedModel}
+                        className="shrink-0"
+                    />
 
                     <div className="flex-1 relative flex items-center">
                         <input

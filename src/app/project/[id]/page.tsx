@@ -47,6 +47,7 @@ function WorkspaceContent() {
     const [agentPlan, setAgentPlan] = useState<any>(null)
     const [agentFiles, setAgentFiles] = useState<string[]>([])
     const [thoughts, setThoughts] = useState<Array<{ agent: string, message: string, timestamp: number }>>([])
+    const [previewError, setPreviewError] = useState<{ message: string, line?: number } | null>(null)
 
     // Ref to always have latest projectFiles in callbacks without stale closure
     const projectFilesRef = useRef<Record<string, string>>({})
@@ -117,6 +118,7 @@ function WorkspaceContent() {
         async (prompt: string, forceNew = false) => {
             setIsGenerating(true)
             setError(null)
+            setPreviewError(null)
             setAgentPhases([])
             setCurrentPhase(null)
             setAgentStatus('running')
@@ -346,6 +348,14 @@ function WorkspaceContent() {
     }, [saveProjectToDb, initialPrompt, generatedCode])
 
     const handleSendMessage = (content: string) => {
+        // For new projects with no files, show quiz to enrich the prompt
+        const isNewProject = Object.keys(projectFilesRef.current).length === 0
+        const looksLikeNewBuild = content.split(' ').length > 3 && !isRefactorRequest(content, !isNewProject)
+        if (isNewProject && looksLikeNewBuild) {
+            setQuizPrompt(content)
+            setShowQuiz(true)
+            return
+        }
         generateCode(content)
     }
 
@@ -355,6 +365,25 @@ function WorkspaceContent() {
             setTimeout(() => setGeneratedCode(prev => prev.trimEnd()), 50)
         }
     }, [generatedCode])
+
+    const handleFixError = useCallback(() => {
+        if (isGenerating) return
+        const technicalError = previewError ? `DETECTED ERROR: "${previewError.message}" on line ${previewError.line || 'unknown'}` : ''
+        const fixPrompt = `CRITICAL AUDIT: The current preview or project is not working correctly. ${technicalError} Please perform a deep audit of all files. Fix any syntax errors, ensure 'public/preview.html' is correctly linked, repair any broken React imports, and ensure the entire app renders perfectly without console errors. THE GOAL IS 100% WORKING UI.`
+        generateCode(fixPrompt)
+    }, [isGenerating, generateCode, previewError])
+
+    // Listen for events from the preview iframe
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'PREVIEW_ERROR') {
+                setPreviewError(event.data.payload)
+                console.warn('[Preview Error Detected]:', event.data.payload)
+            }
+        }
+        window.addEventListener('message', handleMessage)
+        return () => window.removeEventListener('message', handleMessage)
+    }, [])
 
     // Listen for custom refresh events
     useEffect(() => {
@@ -445,8 +474,9 @@ function WorkspaceContent() {
                     onDeviceChange={setActiveDevice}
                     onExport={() => downloadProjectZip(projectName, projectFilesRef.current)}
                     onRename={handleRenameProject}
-                    isStitch={useStitch}
-                    isKimi={useKimi}
+                    onFixError={handleFixError}
+                    hasError={!!previewError}
+                    isGenerating={isGenerating}
                 />
 
                 <div className="flex-1 flex overflow-hidden relative">
@@ -566,6 +596,8 @@ function WorkspaceContent() {
                                 isGenerating={isGenerating}
                                 generatingFiles={agentFiles}
                                 currentPhaseLabel={currentPhase?.label || ''}
+                                selectedModel={'gemini'}
+                                onModelChange={() => { }}
                             />
                         </div>
                     </div>

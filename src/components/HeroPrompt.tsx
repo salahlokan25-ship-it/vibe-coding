@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
-import { Plus, Paperclip, Zap, Figma, Github, Sparkles, Send, Terminal, Layout, Layers, ShieldCheck } from 'lucide-react'
+import { Plus, Paperclip, Zap, Figma, Github, Sparkles, Send, Terminal, Layout, Layers, ShieldCheck, ImagePlus, X } from 'lucide-react'
+import ModelSelector, { AIModel } from './ModelSelector'
 
 const SUGGESTIONS = [
     'Build a fintech dashboard with dark theme',
@@ -16,10 +17,11 @@ const SUGGESTIONS = [
 export default function HeroPrompt() {
     const [prompt, setPrompt] = useState('')
     const [isLoading, setIsLoading] = useState(false)
-    const [useStitch, setUseStitch] = useState(false)
-    const [useKimi, setUseKimi] = useState(false)
+    const [selectedModel, setSelectedModel] = useState<AIModel>('auto') // Unified Model State
+    const [attachedImage, setAttachedImage] = useState<string | null>(null) // Added image support to homepage
     const [activeSuggestion, setActiveSuggestion] = useState(0)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const router = useRouter()
 
     // Add scroll parallax
@@ -48,9 +50,24 @@ export default function HeroPrompt() {
         setIsLoading(true)
         const id = crypto.randomUUID()
         const params = new URLSearchParams({ prompt: prompt.trim() })
-        if (useStitch) params.set('stitch', 'true')
-        if (useKimi) params.set('kimi', 'true')
+        if (selectedModel !== 'auto') params.set('model', selectedModel)
+        if (attachedImage) {
+            // In a real app we'd upload to Supabase, here we pass via state or localStorage for now
+            // To be robust, let's store it in sessionStorage and retrieve in workspace
+            sessionStorage.setItem(`image_${id}`, attachedImage)
+        }
         router.push(`/project/${id}?${params.toString()}`)
+    }
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0]
+            const reader = new FileReader()
+            reader.onload = (e) => {
+                setAttachedImage(e.target?.result as string)
+            }
+            reader.readAsDataURL(file)
+        }
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -123,6 +140,24 @@ export default function HeroPrompt() {
                 >
                     <div className="glass-card p-1.5 rounded-[2rem] overflow-hidden group border-white/10 hover:border-orange-500/30 transition-all duration-500 shadow-2xl bg-white/[0.03] backdrop-blur-3xl">
                         <div className="p-5">
+                            <AnimatePresence>
+                                {attachedImage && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.9 }}
+                                        className="relative w-24 h-16 mb-4 rounded-lg overflow-hidden border border-orange-500/50 group"
+                                    >
+                                        <img src={attachedImage} alt="Reference" className="w-full h-full object-cover" />
+                                        <button 
+                                            onClick={() => setAttachedImage(null)}
+                                            className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                             <textarea
                                 ref={textareaRef}
                                 value={prompt}
@@ -141,24 +176,27 @@ export default function HeroPrompt() {
 
                         <div className="flex items-center justify-between px-5 pb-5 pt-2">
                             <div className="flex items-center gap-3">
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    className="hidden" 
+                                    ref={fileInputRef} 
+                                    onChange={handleFileSelect} 
+                                />
                                 <motion.button
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
-                                    className="p-3 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white transition-all duration-300"
-                                    aria-label="Add attachment"
-                                    id="attachment-btn"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="p-3 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-orange-500 transition-all duration-300"
+                                    aria-label="Upload screenshot"
+                                    id="upload-image-btn"
                                 >
-                                    <Plus size={20} />
+                                    <ImagePlus size={20} />
                                 </motion.button>
-                                <motion.button
-                                    whileHover={{ scale: 1.1 }}
-                                    whileTap={{ scale: 0.9 }}
-                                    className="p-3 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white transition-all duration-300"
-                                    aria-label="Upload file"
-                                    id="upload-btn"
-                                >
-                                    <Paperclip size={18} />
-                                </motion.button>
+                                <ModelSelector 
+                                    selectedModel={selectedModel} 
+                                    onModelChange={setSelectedModel} 
+                                />
                             </div>
 
                             <div className="flex items-center gap-4">

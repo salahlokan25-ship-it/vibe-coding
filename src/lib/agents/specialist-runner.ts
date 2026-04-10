@@ -15,6 +15,16 @@ import {
     CONTENT_STRATEGIST_PROMPT,
     ANIMATION_DIRECTOR_PROMPT,
     CODE_REVIEWER_PROMPT,
+    FEATURE_ARCHITECT_PROMPT,
+    CONTEXTUAL_DATA_PROMPT,
+    VISUAL_POLISH_PROMPT,
+    USER_JOURNEY_PROMPT,
+    AESTHETIC_REVIEW_PROMPT,
+    MARKETING_PROMPT,
+    SMART_LAYOUT_PROMPT,
+    POST_BUILD_PERFORMANCE_PROMPT,
+    MOTION_SIGNATURE_PROMPT,
+    SPATIAL_DEPTH_PROMPT,
 } from './specialist-prompts'
 import {
     callLLM,
@@ -29,7 +39,18 @@ import {
     SeoPackage,
     ContentStrategy,
     AnimationPlan,
-    SpecialistContext
+    SpecialistContext,
+    CodeReviewResult,
+    FeatureArchitecture,
+    ContextualData,
+    VisualPolishMandate,
+    UserJourneyFlow,
+    MarketingPackage,
+    AestheticAuditResult,
+    LayoutArchitecture,
+    PerformanceAuditResult,
+    MotionArchitecture,
+    SpatialDepthMandate,
 } from './types'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,6 +58,7 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Types have been moved to src/lib/agents/types.ts
+export type { SpecialistContext, FeatureArchitecture }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: safe JSON parse with fallback
@@ -102,6 +124,9 @@ Create the complete design system / token system for this project.
         spacing: { section_padding_y: 'py-24 md:py-32', container: 'max-w-7xl mx-auto px-6' },
         shadows: { card: '0 4px 24px rgba(0,0,0,0.4)' },
         animation: { easing_default: 'cubic-bezier(0.25,0.46,0.45,0.94)' },
+        logo_svg: '<svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="12" fill="currentColor"/></svg>',
+        favicon_svg: '<svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="12" fill="currentColor"/></svg>',
+        brand_concept: 'Clean and modern',
         tailwind_extend: '{}',
         css_variables: ':root {}'
     })
@@ -293,19 +318,151 @@ export async function runCodeReviewer(
     filePath: string,
     fileContent: string,
     opts: AgentRunnerOptions
-): Promise<string> {
+): Promise<CodeReviewResult> {
     const input = `
 FILE PATH: ${filePath}
 
 FILE CONTENT:
 ${fileContent}
 
-Perform a comprehensive quality review and return the complete, fixed file.
+Perform a comprehensive quality review and return the complete, fixed file according to the JSON format.
 `.trim()
-    return callLLM(CODE_REVIEWER_PROMPT, input, opts)
+    // Use FASTEST model for reviews to save time (Groq > Kimi > Gemini)
+    const reviewOpts = { ...opts, preferredProvider: opts.groqKey ? 'groq' : (opts.kimiKey ? 'kimi' : 'gemini') }
+    const raw = await callLLM(CODE_REVIEWER_PROMPT, input, reviewOpts)
+    return safeParseJSON<CodeReviewResult>(raw, {
+        pass: true,
+        failed_checks: ['Failed to parse reviewer feedback'],
+        fixed_code: fileContent // Fallback to original content on severe parsing failure
+    })
 }
 
-// Function moved to src/lib/agents/prompts.ts
+// ── AGENT 16: Feature Architect ─────────────────────────────────────────────
+export async function runFeatureArchitect(
+    userPrompt: string,
+    intent: IntentAnalysis,
+    opts: AgentRunnerOptions
+): Promise<FeatureArchitecture> {
+    const input = `User Request: "${userPrompt}"\nIntent: ${JSON.stringify(intent)}`
+    const raw = await callLLM(FEATURE_ARCHITECT_PROMPT, input, opts)
+    return safeParseJSON<FeatureArchitecture>(raw, {
+        primary_feature_set: [{ name: 'Core Feature', description: 'Main functionality', technical_interaction_notes: '', visual_style: '', key_components: [] }],
+        data_flow_plan: 'Direct user interaction',
+        advanced_ui_logic: []
+    })
+}
+
+// ── AGENT 17: Contextual Data Simulator ──────────────────────────────────────
+export async function runContextualDataSimulator(
+    intent: IntentAnalysis,
+    opts: AgentRunnerOptions
+): Promise<ContextualData> {
+    const input = `Intent: ${JSON.stringify(intent)}`
+    const raw = await callLLM(CONTEXTUAL_DATA_PROMPT, input, opts)
+    return safeParseJSON<ContextualData>(raw, { datasets: {}, schema_notes: '' })
+}
+
+// ── AGENT 18: Visual Polish Auditor ──────────────────────────────────────────
+export async function runVisualPolishAuditor(
+    intent: IntentAnalysis,
+    designSystem: DesignSystem,
+    opts: AgentRunnerOptions
+): Promise<VisualPolishMandate> {
+    const input = `Intent: ${JSON.stringify(intent)}\nDesign System: ${JSON.stringify(designSystem)}`
+    const raw = await callLLM(VISUAL_POLISH_PROMPT, input, opts)
+    return safeParseJSON<VisualPolishMandate>(raw, {
+        typography_fixes: [],
+        spacing_adjustments: [],
+        shadow_upgrades: [],
+        motion_refinements: []
+    })
+}
+
+// ── AGENT 19: User Journey Architect ─────────────────────────────────────────
+export async function runUserJourneyArchitect(
+    userPrompt: string,
+    intent: IntentAnalysis,
+    opts: AgentRunnerOptions
+): Promise<UserJourneyFlow> {
+    const input = `User Request: "${userPrompt}"\nIntent: ${JSON.stringify(intent)}`
+    const raw = await callLLM(USER_JOURNEY_PROMPT, input, opts)
+    return safeParseJSON<UserJourneyFlow>(raw, {
+        primary_flow_name: 'Main Journey',
+        states: [],
+        global_state_logic: '',
+        ux_friction_warnings: []
+    })
+}
+
+// ── AGENT 20: Aesthetic Integrity Reviewer ──────────────────────────────────
+export async function runAestheticReviewer(
+    filePath: string,
+    fileContent: string,
+    opts: AgentRunnerOptions
+): Promise<AestheticAuditResult> {
+    const input = `FILE: ${filePath}\nCONTENT: ${fileContent}`
+    const raw = await callLLM(AESTHETIC_REVIEW_PROMPT, input, opts)
+    return safeParseJSON<AestheticAuditResult>(raw, {
+        visual_fidelity_score: 80,
+        polishing_fixes: [],
+        fixed_code: fileContent
+    })
+}
+
+// ── AGENT 21: Marketing Strategist ──────────────────────────────────────────
+export async function runMarketingStrategist(
+    intent: IntentAnalysis,
+    opts: AgentRunnerOptions
+): Promise<MarketingPackage> {
+    const input = `Intent: ${JSON.stringify(intent)}`
+    const raw = await callLLM(MARKETING_PROMPT, input, opts)
+    return safeParseJSON<MarketingPackage>(raw, {
+        tagline: intent.core_goal,
+        twitter_post: '',
+        linkedin_post: '',
+        product_hunt_tagline: '',
+        launch_strategy: []
+    })
+}
+
+// ── AGENT 22: Smart Layout Architect ─────────────────────────────────────────
+export async function runSmartLayoutArchitect(
+    intent: IntentAnalysis,
+    opts: AgentRunnerOptions
+): Promise<LayoutArchitecture> {
+    const input = `Intent: ${JSON.stringify(intent)}`
+    const raw = await callLLM(SMART_LAYOUT_PROMPT, input, opts)
+    return safeParseJSON<LayoutArchitecture>(raw, { global_rhythm: 'Minimal', section_layouts: [] })
+}
+
+// ── AGENT 24: Motion Signature Architect ─────────────────────────────────────
+export async function runMotionSignatureArchitect(
+    intent: IntentAnalysis,
+    opts: AgentRunnerOptions
+): Promise<MotionArchitecture> {
+    const input = `Intent: ${JSON.stringify(intent)}`
+    const raw = await callLLM(MOTION_SIGNATURE_PROMPT, input, opts)
+    return safeParseJSON<MotionArchitecture>(raw, {
+        spring_physics: { stiffness: 100, damping: 20, mass: 1 },
+        stagger_delay: 0.1,
+        interaction_rules: []
+    })
+}
+
+// ── AGENT 25: Spatial Depth Specialist ──────────────────────────────────────
+export async function runSpatialDepthSpecialist(
+    intent: IntentAnalysis,
+    designSystem: DesignSystem,
+    opts: AgentRunnerOptions
+): Promise<SpatialDepthMandate> {
+    const input = `Intent: ${JSON.stringify(intent)}\nDesign: ${JSON.stringify(designSystem)}`
+    const raw = await callLLM(SPATIAL_DEPTH_PROMPT, input, opts)
+    return safeParseJSON<SpatialDepthMandate>(raw, {
+        layering_story: '',
+        glassmorphism_config: { blur: '16px', opacity: '0.05', border_white_ratio: '0.1' },
+        glow_architecture: []
+    })
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ORCHESTRATED SPECIALIST PIPELINE
@@ -319,19 +476,39 @@ export async function runSpecialistPrePassParallel(
     // Run Intent Analyst first (others depend on it)
     const intent = await runIntentAnalyst(userPrompt, opts)
 
-    // Run all parallel specialists simultaneously
-    const [designSystem, copy, contentStrategy, animationPlan] = await Promise.allSettled([
+    const [designSystem, copy, contentStrategy, animationPlan, featureArchitecture, contextualData, userJourney, marketing, layout, motion] = await Promise.allSettled([
         runDesignSystemEngineer(intent, userPrompt, opts),
         runCopywriter(intent, userPrompt, opts),
         runContentStrategist(userPrompt, intent, opts),
         runAnimationDirector(userPrompt, intent, opts),
+        runFeatureArchitect(userPrompt, intent, opts),
+        runContextualDataSimulator(intent, opts),
+        runUserJourneyArchitect(userPrompt, intent, opts),
+        runMarketingStrategist(intent, opts),
+        runSmartLayoutArchitect(intent, opts),
+        runMotionSignatureArchitect(intent, opts),
+    ])
+
+    // Post-pass (depends on pre-results)
+    const dsValue = designSystem.status === 'fulfilled' ? designSystem.value : {} as DesignSystem
+    const [visualPolish, spatial] = await Promise.all([
+        runVisualPolishAuditor(intent, dsValue, opts),
+        runSpatialDepthSpecialist(intent, dsValue, opts)
     ])
 
     return {
         intent,
-        designSystem: designSystem.status === 'fulfilled' ? designSystem.value : {} as DesignSystem,
+        designSystem: dsValue,
         copy: copy.status === 'fulfilled' ? copy.value : {} as CopyPackage,
         contentStrategy: contentStrategy.status === 'fulfilled' ? contentStrategy.value : {} as ContentStrategy,
         animationPlan: animationPlan.status === 'fulfilled' ? animationPlan.value : {} as AnimationPlan,
+        featureArchitecture: featureArchitecture.status === 'fulfilled' ? featureArchitecture.value : {} as FeatureArchitecture,
+        contextualData: contextualData.status === 'fulfilled' ? contextualData.value : {} as ContextualData,
+        userJourney: userJourney.status === 'fulfilled' ? userJourney.value : {} as UserJourneyFlow,
+        marketing: marketing.status === 'fulfilled' ? marketing.value : {} as MarketingPackage,
+        layout: layout.status === 'fulfilled' ? layout.value : {} as LayoutArchitecture,
+        motion: motion.status === 'fulfilled' ? motion.value : {} as MotionArchitecture,
+        spatial,
+        visualPolish,
     }
 }

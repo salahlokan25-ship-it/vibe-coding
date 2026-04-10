@@ -2,17 +2,23 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Bot, Loader2, Zap, History, ChevronUp, Sparkles, Command } from 'lucide-react'
+import { Send, Bot, Loader2, Zap, History, ChevronUp, Sparkles, Command, Target, X, ImagePlus } from 'lucide-react'
 import type { ChatMessage } from '@/types'
 import ReactMarkdown from 'react-markdown'
 
+import ModelSelector, { AIModel } from '../ModelSelector'
+
 interface ChatPanelProps {
     messages: ChatMessage[]
-    onSendMessage: (message: string) => void
+    onSendMessage: (message: string, attachedImage?: string) => void
     isGenerating: boolean
     generatingFiles?: string[]
     currentPhaseLabel?: string
     minimal?: boolean
+    selectedModel: AIModel
+    onModelChange: (model: AIModel) => void
+    vibeContext?: { tagName: string, selector: string, text: string } | null
+    onClearVibeContext?: () => void
 }
 
 export default function ChatPanel({
@@ -22,12 +28,19 @@ export default function ChatPanel({
     generatingFiles = [],
     currentPhaseLabel = '',
     minimal = true,
+    selectedModel,
+    onModelChange,
+    vibeContext,
+    onClearVibeContext,
 }: ChatPanelProps) {
     const [input, setInput] = useState('')
+    const [attachedImage, setAttachedImage] = useState<string | null>(null)
     const [showHistory, setShowHistory] = useState(false)
     const [isFocused, setIsFocused] = useState(false)
+    const [isDragging, setIsDragging] = useState(false) // Added dragging state
     const scrollRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLTextAreaElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -36,9 +49,10 @@ export default function ChatPanel({
     }, [messages, generatingFiles, currentPhaseLabel, showHistory])
 
     const handleSend = () => {
-        if (!input.trim() || isGenerating) return
-        onSendMessage(input.trim())
+        if ((!input.trim() && !attachedImage) || isGenerating) return
+        onSendMessage(input.trim(), attachedImage || undefined)
         setInput('')
+        setAttachedImage(null)
         if (inputRef.current) {
             inputRef.current.style.height = 'auto'
         }
@@ -49,6 +63,33 @@ export default function ChatPanel({
             e.preventDefault()
             handleSend()
         }
+    }
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        const items = e.clipboardData?.items
+        if (!items) return
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i]
+            if (item.type.indexOf('image') === 0) {
+                const file = item.getAsFile()
+                if (file) processImage(file)
+            }
+        }
+    }
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            processImage(e.target.files[0])
+        }
+    }
+
+    const processImage = (file: File) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+            setAttachedImage(e.target?.result as string)
+        }
+        reader.readAsDataURL(file)
     }
 
     const autoResize = () => {
@@ -161,8 +202,58 @@ export default function ChatPanel({
                 )}
             </AnimatePresence>
 
+            <AnimatePresence>
+                {attachedImage && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="mx-3 mb-2 relative group w-[100px] h-[75px] rounded-lg overflow-hidden border border-vibe-accent-blue/30 shadow-[0_4px_24px_rgba(59,130,246,0.15)]"
+                    >
+                        <img src={attachedImage} alt="Attached UI Reference" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <button
+                                onClick={() => setAttachedImage(null)}
+                                className="w-6 h-6 rounded-full bg-red-500/80 text-white flex items-center justify-center hover:bg-red-500 hover:scale-110 transition-all"
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Vibe Select Context Pill */}
+            <AnimatePresence>
+                {vibeContext && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="mx-3 mb-2 flex items-center justify-between bg-[#13111C]/90 border border-orange-500/30 rounded-xl px-4 py-2.5 backdrop-blur-md shadow-[0_4px_24px_rgba(255,92,0,0.15)]"
+                    >
+                        <div className="flex items-center gap-2">
+                            <Target size={14} className="text-orange-500" />
+                            <div>
+                                <span className="text-[11px] font-bold text-orange-400">TARGET: </span>
+                                <span className="text-[11px] font-mono text-white/80">{vibeContext.selector}</span>
+                                {vibeContext.text && (
+                                    <span className="text-[11px] text-white/50 ml-2 italic">"{vibeContext.text}"</span>
+                                )}
+                            </div>
+                        </div>
+                        <button
+                            onClick={onClearVibeContext}
+                            className="p-1 hover:bg-white/10 rounded-md transition-colors text-white/40 hover:text-white"
+                        >
+                            <X size={14} />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* ── MAIN INPUT BAR ────────────────────────────────────── */}
-            <div className={`flex items-end gap-3 p-1.5 transition-all duration-500 ${isFocused ? 'bg-white/[0.04]' : ''} rounded-[1.5rem]`}>
+            <div className={`flex items-end gap-3 p-1.5 transition-all duration-500 ${isFocused || vibeContext ? 'bg-white/[0.04]' : ''} rounded-[1.5rem]`}>
                 <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
@@ -171,6 +262,35 @@ export default function ChatPanel({
                     title="Toggle Build History"
                 >
                     <History size={20} />
+                </motion.button>
+
+                <ModelSelector
+                    selectedModel={selectedModel}
+                    onModelChange={onModelChange}
+                    className="shrink-0"
+                />
+
+                <input
+                    type="file"
+                    accept="image/*"
+                    id="image-loader-input"
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                />
+
+                <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => {
+                        console.log('Image upload clicked');
+                        fileInputRef.current?.click();
+                    }}
+                    className="h-11 w-11 shrink-0 flex items-center justify-center rounded-xl bg-white/5 text-white/30 hover:text-orange-500 hover:bg-white/10 border border-white/5 transition-all duration-300 relative z-30"
+                    title="Attach Image (Ctrl+V works too)"
+                    id="upload-image-button"
+                >
+                    <ImagePlus size={20} />
                 </motion.button>
 
                 <div className="flex-1 relative flex items-center min-h-[44px]">
@@ -184,7 +304,8 @@ export default function ChatPanel({
                             autoResize()
                         }}
                         onKeyDown={handleKeyDown}
-                        placeholder={isGenerating ? 'Synthesizing build instructions...' : 'Iterate or refactor your project...'}
+                        onPaste={handlePaste}
+                        placeholder={isGenerating ? 'Synthesizing build instructions...' : 'Iterate, refactor, or drop an image...'}
                         rows={1}
                         disabled={isGenerating}
                         className="w-full bg-transparent py-3 resize-none outline-none text-white placeholder-white/20 text-sm font-medium leading-relaxed max-h-[150px] disabled:opacity-50"

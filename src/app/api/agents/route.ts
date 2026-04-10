@@ -8,92 +8,13 @@ import {
     type AgentRunnerOptions,
 } from '@/lib/agents/runner'
 import {
-    runSpecialistPrePassParallel,
-    runCodeReviewer,
-    runAccessibilityAuditor,
+    runIntentAnalyst,
+    runDesignSystemEngineer,
+    runCopywriter,
     runSeoStrategist,
 } from '@/lib/agents/specialist-runner'
 import { specialistContextToPromptString } from '@/lib/agents/prompts'
 import { parseFilesFromOutput, isRefactorRequest } from '@/lib/agent'
-
-// ─── Silently fetch the Stitch AI Design Blueprint ───────────────────────────
-// This is the "Google Stitch" step: think through design BEFORE writing any code.
-// Runs invisibly in background — user only sees the final preview.
-async function fetchDesignBlueprint(prompt: string, baseUrl: string): Promise<Record<string, any> | null> {
-    try {
-        const res = await fetch(`${baseUrl}/api/stitch`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt }),
-        })
-        if (!res.ok) return null
-        const { blueprint } = await res.json()
-        return blueprint || null
-    } catch {
-        return null  // Never block generation if Stitch fails
-    }
-}
-
-// ─── Discovery Agent: Search for components & animations ────────────────────
-async function fetchDiscoveryInspiration(query: string, type: 'images' | 'components' | 'spline', baseUrl: string): Promise<any> {
-    try {
-        const res = await fetch(`${baseUrl}/api/web-search`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, type }),
-        })
-        if (!res.ok) return null
-        return await res.json()
-    } catch {
-        return null
-    }
-}
-
-
-// Serialize blueprint into a concise context string for injection into prompts
-function blueprintToContext(bp: Record<string, any>): string {
-    if (!bp) return ''
-    return `
-=== AI DESIGN BLUEPRINT (FOLLOW STRICTLY) ===
-PRODUCT: ${bp.product?.name} — "${bp.product?.tagline}"
-AUDIENCE: ${bp.product?.audience}
-VISUAL STYLE: ${bp.visual_language?.style} | Personality: ${bp.visual_language?.personality}
-INSPIRATION: ${bp.visual_language?.inspiration}
-
-COLOR SYSTEM:
-  Background: ${bp.color_system?.background}
-  Surface/Card: ${bp.color_system?.surface}
-  Border: ${bp.color_system?.border}
-  Primary: ${bp.color_system?.primary} | Glow: ${bp.color_system?.primary_glow}
-  Secondary: ${bp.color_system?.secondary}
-  Hero Gradient: ${bp.color_system?.gradient_hero}
-
-TYPOGRAPHY:
-  Display Font: ${bp.typography?.display_font} (${bp.typography?.headline_weight})
-  Hero Size: ${bp.typography?.headline_size_hero} | Section Size: ${bp.typography?.headline_size_section}
-
-HERO SECTION:
-  Pattern: ${bp.layout?.hero_pattern}
-  Description: ${bp.layout?.hero_description}
-  Hero Image: ${bp.imagery?.hero_image_url}
-  Headline: "${bp.copy_examples?.hero_headline}"
-  Subheadline: "${bp.copy_examples?.hero_subheadline}"
-  CTA: "${bp.copy_examples?.cta_text}"
-
-KEY IMAGERY:
-  Hero: ${bp.imagery?.hero_image_url}
-  Features: ${bp.imagery?.feature_image_urls?.join(', ')}
-  Avatars: ${bp.imagery?.avatar_urls?.join(', ')}
-  Image Treatment: ${bp.imagery?.image_treatment}
-
-ANIMATIONS:
-  Entry: ${bp.animations?.entry}
-  Hover: ${bp.animations?.hover}
-  CTA: ${bp.animations?.cta_pulse}
-
-STATS EXAMPLES: ${JSON.stringify(bp.copy_examples?.stats)}
-=== END DESIGN BLUEPRINT ===`
-}
 
 // Streaming helper: send a structured event to the client
 function encodeEvent(type: string, payload: unknown): Uint8Array {
@@ -101,31 +22,45 @@ function encodeEvent(type: string, payload: unknown): Uint8Array {
     return new TextEncoder().encode(line)
 }
 
+// Timeout wrapper — kills any AI call that takes longer than `ms`
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+        promise.then(
+            (val) => { clearTimeout(timer); resolve(val) },
+            (err) => { clearTimeout(timer); reject(err) }
+        )
+    })
+}
+
 export async function POST(req: NextRequest) {
     const {
         prompt,
         existingFiles = {},
         forceNew = false,
-        provider = 'gemini', // 'gemini' | 'bytez' | 'kimi'
+        provider = 'gemini',
         history = [],
+        imageContext = null,
     } = await req.json()
 
     const opts: AgentRunnerOptions = {
         geminiKey: process.env.GEMINI_API_KEY?.trim(),
-        bytezKey: process.env.BYTEZ_API_KEY?.trim(),
         kimiKey: process.env.KIMI_API_KEY?.trim(),
         groqKey: process.env.GROQ_API_KEY?.trim(),
-        openaiKey: process.env.OPENAI_API_KEY?.trim(),
-        preferredProvider: provider as any,
+        preferredProvider: (provider === 'gemini' || provider === 'groq' || provider === 'kimi') ? provider as any : 'kimi',
     }
 
     const hasExistingProject = Object.keys(existingFiles).length > 0
     const isRefactor = !forceNew && isRefactorRequest(prompt, hasExistingProject)
 
+    // ── TIMEOUT & BATCH CONFIG ─────────────────────────────────────
+    const AI_TIMEOUT = 120000  // 2 min per AI call (Kimi needs ~60-90s)
+    const BATCH_SIZE = 1       // Sequential — prevents rate-limit hammering on free tiers
+
     const stream = new ReadableStream({
         async start(controller) {
             const send = (type: string, payload: unknown) => {
-                controller.enqueue(encodeEvent(type, payload))
+                try { controller.enqueue(encodeEvent(type, payload)) } catch { }
             }
 
             try {
@@ -134,8 +69,6 @@ export async function POST(req: NextRequest) {
                     send('phase', { agent: 'refactor', label: '🔍 Analyzing what to change...' })
 
                     const lower = prompt.toLowerCase()
-
-                    // Smart file selection: keyword → file path patterns
                     const keywordToPattern: Array<{ keywords: string[], patterns: string[] }> = [
                         { keywords: ['hero', 'banner', 'headline', 'title'], patterns: ['Hero', 'hero', 'Banner'] },
                         { keywords: ['nav', 'navbar', 'header', 'menu', 'navigation'], patterns: ['Nav', 'nav', 'Header', 'header'] },
@@ -144,12 +77,10 @@ export async function POST(req: NextRequest) {
                         { keywords: ['pricing', 'price', 'plan', 'tier'], patterns: ['Pricing', 'pricing', 'Plan'] },
                         { keywords: ['testimonial', 'review', 'social proof'], patterns: ['Testimonial', 'testimonial', 'Review'] },
                         { keywords: ['cta', 'call to action', 'button', 'sign up'], patterns: ['CTA', 'cta', 'Button', 'button'] },
-                        { keywords: ['faq', 'frequently asked', 'accordion'], patterns: ['FAQ', 'faq', 'Accordion'] },
                         { keywords: ['color', 'colour', 'theme', 'dark', 'light', 'style', 'font', 'design'], patterns: ['globals.css', 'tailwind', 'theme', 'styles'] },
                         { keywords: ['page', 'layout', 'main', 'overall', 'entire', 'all', 'whole'], patterns: ['page.tsx', 'layout.tsx', 'index.tsx'] },
                     ]
 
-                    // Find matching file paths
                     const matchedPaths = new Set<string>()
                     const allExistingPaths = Object.keys(existingFiles)
 
@@ -163,19 +94,12 @@ export async function POST(req: NextRequest) {
                         }
                     }
 
-                    // Always include the preview HTML for visual updates
-                    if (existingFiles['public/preview.html']) {
-                        matchedPaths.add('public/preview.html')
-                    }
+                    if (existingFiles['public/preview.html']) matchedPaths.add('public/preview.html')
 
-                    // If nothing matched, fall back to the main page and preview
                     if (matchedPaths.size === 0 || (matchedPaths.size === 1 && matchedPaths.has('public/preview.html'))) {
                         const fallbacks = ['src/app/page.tsx', 'src/app/(tabs)/index.tsx', 'index.html', 'App.tsx']
                         for (const fb of fallbacks) {
-                            if (existingFiles[fb]) {
-                                matchedPaths.add(fb)
-                                break
-                            }
+                            if (existingFiles[fb]) { matchedPaths.add(fb); break }
                         }
                         if (existingFiles['public/preview.html']) matchedPaths.add('public/preview.html')
                     }
@@ -186,12 +110,10 @@ export async function POST(req: NextRequest) {
                     for (const filePath of targets) {
                         send('phase', { agent: 'refactor', label: `✏️ Editing ${filePath}...`, file: filePath })
                         try {
-                            const updated = await runRefactorAgent(
-                                filePath,
-                                existingFiles[filePath] || '',
-                                prompt,
-                                opts,
-                                history  // 👈 Pass conversation memory
+                            const updated = await withTimeout(
+                                runRefactorAgent(filePath, existingFiles[filePath] || '', prompt, opts, history),
+                                AI_TIMEOUT,
+                                `Refactor ${filePath}`
                             )
                             updatedFiles[filePath] = updated
                             send('file', { path: filePath, content: updated })
@@ -202,129 +124,143 @@ export async function POST(req: NextRequest) {
 
                     send('phase', { agent: 'refactor', label: `✅ Edit complete — updated ${targets.length} file(s)`, done: true })
 
-                    // Rebuild merged raw code
                     const mergedRaw = Object.entries(updatedFiles)
                         .map(([p, c]) => `<file path="${p}">\n${c}\n</file>`)
                         .join('\n\n')
 
-                    send('complete', {
-                        files: updatedFiles,
-                        rawCode: mergedRaw,
-                        fileCount: Object.keys(updatedFiles).length,
-                        modifiedCount: targets.length,
-                        mode: 'refactor',
-                    })
+                    send('complete', { files: updatedFiles, rawCode: mergedRaw, fileCount: Object.keys(updatedFiles).length, modifiedCount: targets.length, mode: 'refactor' })
                     controller.close()
                     return
                 }
 
                 // ══ FULL GENERATION MODE ══════════════════════════════════
 
-                // ── STITCH: SILENT DESIGN THINKING PHASE ─────────────────
-                // Runs entirely in background. User sees "Architecting Vision" spinner.
-                // We infer the base URL from the request for internal API routing.
-                send('thought', { agent: 'orchestrator', message: 'Activating Design Intelligence Core...' })
-                const host = req.headers.get('host') || 'localhost:3000'
-                const proto = host.includes('localhost') ? 'http' : 'https'
-                const stitchBlueprint = await fetchDesignBlueprint(prompt, `${proto}://${host}`)
-                const designContext = stitchBlueprint ? blueprintToContext(stitchBlueprint) : ''
-
-                // Merge design context into the prompt for all downstream agents
-                let enrichedPrompt = designContext
-                    ? `${prompt}\n\n${designContext}`
-                    : prompt
-
-                // ── DISCOVERY: SEARCH FOR 21ST.DEV ANIMATIONS & ASSETS ───────────────────────
-                let discoveryContext = ''
-                if (prompt.toLowerCase().includes('animation') || prompt.toLowerCase().includes('21st') || prompt.toLowerCase().includes('3d') || prompt.toLowerCase().includes('spline')) {
-                    send('phase', { agent: 'orchestrator', label: '🔍 Searching 21st.dev for animation inspiration...' })
-                    send('thought', { agent: 'orchestrator', message: 'Discovering premium components and interactive patterns...' })
-
-                    const [animations, spline] = await Promise.all([
-                        fetchDiscoveryInspiration(prompt, 'components', `${proto}://${host}`),
-                        fetchDiscoveryInspiration(prompt, 'spline', `${proto}://${host}`)
-                    ])
-
-                    if (animations?.results?.length > 0) {
-                        discoveryContext += `\n\n=== 21ST.DEV ANIMATION INSPIRATION ===\n`
-                        animations.results.forEach((comp: any) => {
-                            discoveryContext += `- ${comp.name}: ${comp.description} (URL: ${comp.url})\n`
-                        })
-                    }
-                    if (spline?.scene) {
-                        discoveryContext += `\n=== SPLINE 3D SCENE RECOMMENDED ===\nURL: ${spline.scene.url}\nDescription: ${spline.scene.description}\n`
-                    }
-                }
-
-                if (discoveryContext) {
-                    enrichedPrompt = `${enrichedPrompt}\n${discoveryContext}`
-                }
-
-                // ── SPECIALIST PRE-PASS (Parallel Intelligence Gathering) ─────────
-                send('phase', { agent: 'orchestrator', label: '🤖 Activating 10 Specialist Agents...' })
-                send('thought', { agent: 'orchestrator', message: 'Running Intent Analysis, Design System Engineering, Copywriting, Animation Direction, and Content Strategy in parallel...' })
+                // ── STEP 1: FAST SPECIALIST PRE-PASS (3 agents max, 25s timeout each) ──
+                send('phase', { agent: 'orchestrator', label: '🧠 Analyzing intent & designing brand...' })
 
                 let specialistBoost = ''
-                let globalSpecialistCtx: any = null
+                let globalIntent: any = null
+
                 try {
-                    globalSpecialistCtx = await runSpecialistPrePassParallel(prompt, opts)
-                    specialistBoost = specialistContextToPromptString(globalSpecialistCtx)
-                    send('thought', { agent: 'orchestrator', message: `✅ Specialist Intelligence Ready: Brand tone "${globalSpecialistCtx.intent.tone}", Niche "${globalSpecialistCtx.intent.niche}", Copy "${globalSpecialistCtx.copy?.hero?.headline}"` })
-                    send('phase', { agent: 'orchestrator', label: '✅ Intelligence package ready — 10 specialists briefed', done: true })
-                } catch (specErr: any) {
-                    // Never block generation if specialists fail
-                    send('thought', { agent: 'orchestrator', message: `Specialist pre-pass partial: ${specErr.message}` })
+                    // Agent 6: Intent Analyst
+                    const intent = await withTimeout(
+                        runIntentAnalyst(prompt, opts),
+                        10000,
+                        'Intent Analyst'
+                    ).catch(err => {
+                        console.warn('[Specialist] Intent Analyst skipped:', err.message)
+                        return { core_goal: prompt, niche: 'Professional Service', ideal_user: 'General audience', emotional_hook: 'Trust', tone: 'Professional', conversion_goal: 'Contact', key_differentiators: ['Fast', 'Premium'], content_pillars: ['Value'], Suggested_sections: [] } as any
+                    })
+                    globalIntent = intent
+
+                    // Agent 7: Design System (optional — skip if slow)
+                    const designSystem = await withTimeout(
+                        runDesignSystemEngineer(intent, prompt, opts),
+                        10000,
+                        'Design System'
+                    ).catch(() => null)
+
+                    // Agent 8: Copywriter (optional — skip if slow)
+                    const copy = await withTimeout(
+                        runCopywriter(intent, prompt, opts),
+                        10000,
+                        'Copywriter'
+                    ).catch(() => null)
+
+                    // Build a lightweight specialist context
+                    const lightCtxTemplate = {
+                        intent,
+                        designSystem: designSystem || {},
+                        copy: copy || {},
+                        contentStrategy: {},
+                        animationPlan: {},
+                        featureArchitecture: {},
+                        contextualData: {},
+                        userJourney: {},
+                        marketing: {},
+                        layout: {},
+                        motion: {},
+                        spatial: {},
+                        visualPolish: {},
+                    }
+                    specialistBoost = specialistContextToPromptString(lightCtxTemplate as any)
+                    send('phase', { agent: 'orchestrator', label: '✅ Intelligence package complete', done: true })
+                } catch (err: any) {
+                    console.warn('[Specialist] Pre-pass critical fail:', err.message)
+                    send('phase', { agent: 'orchestrator', label: '⚠️ Intelligence skipped', done: true })
                 }
 
+                let enrichedPrompt = prompt
                 if (specialistBoost) {
-                    enrichedPrompt = `${enrichedPrompt}\n\n${specialistBoost}`
+                    // Truncate boost if it's exceptionally large to avoid payload issues
+                    const safeBoost = specialistBoost.length > 4000
+                        ? specialistBoost.substring(0, 4000) + '... (truncated for context)'
+                        : specialistBoost
+                    enrichedPrompt = `${prompt}\n\n${safeBoost}`
                 }
 
-                // ── AGENT 1: ORCHESTRATOR ─────────────────────────────────
-                send('phase', { agent: 'orchestrator', label: '🧠 Orchestrator analyzing your request...' })
-                send('thought', { agent: 'orchestrator', message: 'Analyzing project scope and selecting optimal design system...' })
+                // ── STEP 2: ORCHESTRATOR (with timeout) ──────────────────
+                send('phase', { agent: 'orchestrator', label: '🧠 Planning project structure...' })
 
-                const orchestratorPlan = await runOrchestrator(enrichedPrompt, opts)
+                const orchestratorPlan = await withTimeout(
+                    runOrchestrator(enrichedPrompt, opts),
+                    AI_TIMEOUT,
+                    'Orchestrator'
+                )
 
-
-                send('thought', { agent: 'orchestrator', message: `Determined project type: ${orchestratorPlan.project_type}. Planning ${orchestratorPlan.file_plan.length} files.` })
                 send('plan', orchestratorPlan)
                 send('phase', {
                     agent: 'orchestrator',
-                    label: `✅ Plan ready: ${orchestratorPlan.project_type} with ${orchestratorPlan.file_plan.length} files`,
+                    label: `✅ Plan: ${orchestratorPlan.project_type} with ${orchestratorPlan.file_plan.length} files`,
                     done: true,
                 })
 
-                // ── AGENT 2: PLANNER ──────────────────────────────────────
-                send('phase', { agent: 'planner', label: '📐 Planner designing architecture...' })
-                send('thought', { agent: 'planner', message: 'Mapping file dependencies and defining visual design tokens...' })
+                // ── STEP 3: PLANNER (with timeout) ───────────────────────
+                send('phase', { agent: 'planner', label: '📐 Designing architecture...' })
 
-                const plannerOutput = await runPlanner(orchestratorPlan, enrichedPrompt, opts)
+                const plannerOutput = await withTimeout(
+                    runPlanner(orchestratorPlan, enrichedPrompt, opts),
+                    AI_TIMEOUT,
+                    'Planner'
+                )
 
-                send('thought', { agent: 'planner', message: `Architecture validated. Design style set to: ${plannerOutput.design_tokens.style}.` })
-                send('architecture', plannerOutput)
                 send('phase', {
                     agent: 'planner',
-                    label: `✅ Architecture ready: ${plannerOutput.architecture.length} files mapped`,
+                    label: `✅ Architecture: ${plannerOutput.architecture.length} files mapped`,
                     done: true,
                 })
 
-
-                // ── AGENT 3: CODE GENERATOR (Parallelized Batches) ────────
+                // ── STEP 4: CODE GENERATION (batched parallel + preview) ─
                 const generatedFiles: Record<string, string> = {}
-                const filesToGenerate = plannerOutput.architecture.filter(
+                let filesToGenerate = plannerOutput.architecture.filter(
                     (f: any) => f.path !== 'public/preview.html'
                 )
 
-                const BATCH_SIZE = 3
-                const totalFiles = filesToGenerate.length
+                // Fallback: If planner returned nothing, use orchestrator's file plan
+                if (filesToGenerate.length === 0 && orchestratorPlan.file_plan.length > 0) {
+                    filesToGenerate = orchestratorPlan.file_plan
+                        .filter(p => p !== 'public/preview.html')
+                        .map(path => ({ path, purpose: 'Component' } as any))
+                }
+
+                const totalFiles = Math.max(1, filesToGenerate.length)
 
                 send('phase', {
                     agent: 'coder',
-                    label: `⚙️ Parallel Synthesis: Architecturing ${totalFiles} nodes...`,
+                    label: `⚙️ Generating ${totalFiles} files...`,
                     total: totalFiles,
                 })
 
+                console.log(`[AI Orchestrator] Starting generation of ${totalFiles} files in batches of ${BATCH_SIZE}`)
+
+                // Start preview generation in background (non-blocking)
+                const previewPromise = withTimeout(
+                    runPreviewGenerator(plannerOutput, orchestratorPlan, enrichedPrompt, opts),
+                    AI_TIMEOUT,
+                    'Preview Generator'
+                ).catch(() => '')
+
+                // Generate code files in batches
                 for (let i = 0; i < totalFiles; i += BATCH_SIZE) {
                     const batch = filesToGenerate.slice(i, i + BATCH_SIZE)
                     const batchPromises = batch.map(async (fileSpec: any, batchIdx: number) => {
@@ -338,112 +274,42 @@ export async function POST(req: NextRequest) {
                             total: totalFiles,
                         })
 
-                        send('thought', {
-                            agent: 'coder',
-                            message: `Implementing component: ${fileSpec.path.split('/').pop()}. Applying Figma-grade styling...`,
-                            file: fileSpec.path
-                        })
-
                         try {
-                            const rawFileContent = await runCodeGenerator(
-                                fileSpec.path,
-                                fileSpec.purpose,
-                                plannerOutput,
-                                orchestratorPlan,
-                                enrichedPrompt,
-                                opts,
-                                globalSpecialistCtx
+                            const fileContent = await withTimeout(
+                                runCodeGenerator(fileSpec.path, fileSpec.purpose, plannerOutput, orchestratorPlan, enrichedPrompt, opts, null),
+                                AI_TIMEOUT,
+                                `Code: ${fileSpec.path}`
                             )
 
-                            // ── MASTERY PASS: SECONDARY QUALITY REVIEW ─────────────
-                            send('thought', {
-                                agent: 'coder',
-                                message: `🛡️ Performing Mastery Review on ${fileSpec.path.split('/').pop()}...`,
-                                file: fileSpec.path
-                            })
-
-                            let reviewedContent = await runCodeReviewer(
-                                fileSpec.path,
-                                rawFileContent,
-                                opts
-                            )
-
-                            // For UI files, also run accessibility auditor
-                            if (fileSpec.path.endsWith('.tsx') || fileSpec.path.endsWith('.html')) {
-                                send('thought', {
-                                    agent: 'accessibility',
-                                    message: `♿ Auditing accessibility for ${fileSpec.path.split('/').pop()}...`,
-                                    file: fileSpec.path
-                                })
-                                reviewedContent = await runAccessibilityAuditor(
-                                    fileSpec.path,
-                                    reviewedContent,
-                                    opts
-                                )
-                            }
-
-                            const fileContent = reviewedContent
                             generatedFiles[fileSpec.path] = fileContent
-                            send('file', {
-                                path: fileSpec.path,
-                                content: fileContent,
-                                index: fileIndex,
-                                total: totalFiles
-                            })
-                            return { path: fileSpec.path, success: true }
+                            send('file', { path: fileSpec.path, content: fileContent, index: fileIndex, total: totalFiles })
                         } catch (err: any) {
-                            if (err.message?.includes('429')) {
-                                throw err // Propagate rate limit to abort/retry logic
-                            }
+                            console.error(`[Coder] Failed ${fileSpec.path}:`, err.message)
                             send('error', { file: fileSpec.path, message: err.message })
-                            generatedFiles[fileSpec.path] = `// Error generating ${fileSpec.path}: ${err.message}`
-                            return { path: fileSpec.path, success: false }
+                            generatedFiles[fileSpec.path] = `// Error: ${err.message}`
                         }
                     })
 
-                    // Run batch in parallel
                     await Promise.all(batchPromises)
 
-                    // Throttling between batches to stay safe for free-tier Gemini (15 RPM)
+                    // Minimal throttle between batches
                     if (i + BATCH_SIZE < totalFiles) {
-                        const batchDelay = opts.kimiKey ? 500 : (opts.geminiKey ? 3000 : 1000)
-                        await new Promise(r => setTimeout(r, batchDelay))
+                        await new Promise(r => setTimeout(r, 200))
                     }
                 }
 
-                // ── SEO & METADATA PASS ──────────────────────────────────
-                send('phase', { agent: 'seo_strategist', label: '🔍 Optimizing for SEO & Social Media...' })
-                send('thought', { agent: 'seo_strategist', message: 'Generating meta tags, OG signatures, and technical SEO files...' })
+                send('phase', { agent: 'coder', label: `✅ All ${totalFiles} files generated`, done: true })
 
-                try {
-                    if (globalSpecialistCtx) {
-                        const seoPackage = await runSeoStrategist(globalSpecialistCtx.intent, orchestratorPlan, opts)
-                        
-                        generatedFiles['robots.txt'] = seoPackage.robots_txt
-                        generatedFiles['sitemap.xml'] = seoPackage.sitemap_xml
-                        
-                        send('file', { path: 'robots.txt', content: seoPackage.robots_txt })
-                        send('file', { path: 'sitemap.xml', content: seoPackage.sitemap_xml })
-                        send('phase', { agent: 'seo_strategist', label: '✅ SEO optimized', done: true })
-                    }
-                } catch (seoErr) {
-                    send('thought', { agent: 'seo_strategist', message: 'SEO optimization skipped (optional pass).' })
-                }
+                // ── STEP 5: RESOLVE PREVIEW ──────────────────────────────
+                const previewHtml = await previewPromise
 
-                // ── PREVIEW GENERATOR ─────────────────────────────────────
-                send('phase', { agent: 'preview', label: '🎨 Generating live preview...' })
-                send('thought', { agent: 'preview', message: 'Synthesizing all components into a standalone high-fidelity preview...' })
-
-                try {
-                    const previewHtml = await runPreviewGenerator(plannerOutput, orchestratorPlan, enrichedPrompt, opts)
+                if (previewHtml) {
                     generatedFiles['public/preview.html'] = previewHtml
                     send('file', { path: 'public/preview.html', content: previewHtml })
-                    send('phase', { agent: 'preview', label: '✅ Preview ready', done: true })
-                } catch (err: any) {
-                    send('error', { file: 'public/preview.html', message: err.message })
+                    send('phase', { agent: 'preview', label: '✅ Live preview ready', done: true })
                 }
 
-                // ── COMPLETE ──────────────────────────────────────────────
+                // ── COMPLETE ─────────────────────────────────────────────
                 const mergedRaw = Object.entries(generatedFiles)
                     .map(([p, c]) => `<file path="${p}">\n${c}\n</file>`)
                     .join('\n\n')
@@ -458,7 +324,7 @@ export async function POST(req: NextRequest) {
                 controller.close()
 
             } catch (err: any) {
-                send('fatal', { message: err.message || 'Multi-agent pipeline failed' })
+                send('fatal', { message: err.message || 'Pipeline failed' })
                 controller.close()
             }
         },

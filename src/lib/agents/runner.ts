@@ -12,6 +12,7 @@ import {
     PREVIEW_GENERATOR_PROMPT,
     specialistContextToPromptString,
 } from './prompts'
+import fs from 'fs'
 import { PromptEnhancer } from './enhancer'
 import { IMAGE_INJECTION_PROMPT } from '../imagePromptInjector'
 export * from './types'
@@ -41,90 +42,104 @@ export async function callLLM(
 ): Promise<string> {
     const providers = []
 
-    // 1. Gemini (Primary - High Reasoning & Multi-modal)
-    if (opts.geminiKey) {
-        providers.push({
-            name: 'gemini',
-            call: () => callGemini(opts.geminiKey!, systemPrompt, userMessage)
-        })
-    }
+    // ── PROVIDER ORDER (optimized for reliability based on live usage) ──
+    // Priority: Kimi (most reliable) > Groq (fastest when not rate-limited) > Gemini (key issues) 
 
-    // 2. DeepSeek via ByteZ (Elite Intelligence)
-    if (opts.bytezKey) {
+    // 1. Kimi via NVIDIA (Most Reliable — confirmed working)
+    if (opts.kimiKey) {
+        const kimiKey = opts.kimiKey.trim()
         providers.push({
-            name: 'bytez',
+            name: 'kimi',
             call: () => callOpenAICompatible(
-                'https://api.bytez.com/v1',
-                'deepseek-ai/DeepSeek-V3',
-                opts.bytezKey!,
+                'https://integrate.api.nvidia.com/v1',
+                'meta/llama-3.3-70b-instruct',
+                kimiKey,
                 systemPrompt,
                 userMessage,
-                16384 // DeepSeek handles large files well
+                8192
             )
         })
     }
 
-    // 3. Groq (Fast & Smart - Llama 3.3 70B)
+    // 2. Groq (Fastest when not rate-limited)
     if (opts.groqKey) {
+        const groqKey = opts.groqKey.trim()
         providers.push({
             name: 'groq',
             call: () => callOpenAICompatible(
                 'https://api.groq.com/openai/v1',
                 'llama-3.3-70b-versatile',
-                opts.groqKey!,
+                groqKey,
                 systemPrompt,
                 userMessage,
-                16384
+                8000
             )
         })
     }
 
-    // 4. Kimi (Prioritized - High RPM Fallback)
-    if (opts.kimiKey) {
+    // 3. Gemini (gemini-2.0-flash — best free quality)
+    if (opts.geminiKey) {
+        const geminiKey = opts.geminiKey.trim()
         providers.push({
-            name: 'kimi',
-            call: () => callOpenAICompatible(
-                'https://integrate.api.nvidia.com/v1',
-                'moonshotai/kimi-k2-instruct',
-                opts.kimiKey!,
-                systemPrompt,
-                userMessage
-            )
+            name: 'gemini',
+            call: () => callGemini(geminiKey, systemPrompt, userMessage)
         })
     }
 
     if (providers.length === 0) {
-        throw new Error('No AI providers configured. Please check your .env.local keys.')
+        throw new Error('No AI providers configured. Please add KIMI_API_KEY, GROQ_API_KEY or GEMINI_API_KEY to .env.local')
     }
 
-    // Chain of Responsibility: Try each provider until one works
-    let lastError = null
-    for (const provider of providers) {
-        try {
-            console.log(`[AI Orchestrator] Using provider: ${provider.name}`)
-            const result = await provider.call()
-
-            // Validate that we didn't just get an error string disguised as content
-            if (result.toLowerCase().includes('quota exceeded') || result.toLowerCase().includes('too many requests')) {
-                throw new Error(`429: ${provider.name} rate limit detected in response text`)
-            }
-
-            return result
-        } catch (err: any) {
-            lastError = err
-            const errMsg = err.message?.toLowerCase() || ''
-            const isRateLimit = errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('limit') || errMsg.includes('too many') || errMsg.includes('401')
-
-            if (isRateLimit) {
-                console.warn(`[AI Orchestrator] Provider ${provider.name} rate limited. Falling back...`)
-                continue
-            }
-            // If it's a fatal error (not rate limit), we might want to fail fast or continue
-            console.error(`[AI Orchestrator] Provider ${provider.name} failed:`, err.message)
+    // Respect preferred provider if specified
+    if (opts.preferredProvider) {
+        const preferredIdx = providers.findIndex(p => p.name === opts.preferredProvider)
+        if (preferredIdx !== -1) {
+            const [preferred] = providers.splice(preferredIdx, 1)
+            providers.unshift(preferred)
         }
     }
 
-    throw new Error(`All AI providers failed. Last error: ${lastError?.message}`)
+    // Chain of Responsibility: Try each provider — skip immediately on known-fatal errors
+    let lastError: any = null
+    for (const provider of providers) {
+        try {
+            console.log(`[AI] → ${provider.name}`)
+            fs.appendFileSync('src/lib/agents/ai_debug.log', `[${new Date().toISOString()}] [AI] Calling ${provider.name}\n`)
+            const result = await provider.call()
+            fs.appendFileSync('src/lib/agents/ai_debug.log', `[${new Date().toISOString()}] [AI] ${provider.name} ✓ success\n`)
+            return result
+        } catch (err: any) {
+            lastError = err
+            const errMsg = (err.message || '').toLowerCase()
+            fs.appendFileSync('src/lib/agents/ai_debug.log', `[${new Date().toISOString()}] [AI ✗] ${provider.name}: ${err.message?.slice(0, 120)}\n`)
+            console.warn(`[AI ✗] ${provider.name}: ${err.message?.slice(0, 80)}`)
+
+            // Rate limit — skip to next provider immediately (no wasted 4s wait here)
+            if (errMsg.includes('429') || errMsg.includes('too many') || errMsg.includes('rate limit')) {
+                console.warn(`[AI] ${provider.name} rate-limited → trying next`)
+                continue
+            }
+            // Auth / key invalid — skip immediately
+            if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('key not found') || errMsg.includes('api_key_invalid') || errMsg.includes('invalid api key')) {
+                console.warn(`[AI] ${provider.name} invalid key → trying next`)
+                continue
+            }
+            // Server error — skip immediately
+            if (errMsg.includes('500') || errMsg.includes('internal server') || errMsg.includes('502') || errMsg.includes('503')) {
+                console.warn(`[AI] ${provider.name} server error → trying next`)
+                continue
+            }
+            // Quota exhausted — skip
+            if (errMsg.includes('quota') || errMsg.includes('exhausted') || errMsg.includes('limit exceeded')) {
+                console.warn(`[AI] ${provider.name} quota exhausted → trying next`)
+                continue
+            }
+            // Unknown error — skip to next
+            console.warn(`[AI] ${provider.name} unknown error → trying next`)
+        }
+    }
+
+    throw new Error(`All AI providers failed. Last: ${lastError?.message?.slice(0, 200)}`)
 }
 
 async function callOpenAICompatible(
@@ -165,33 +180,20 @@ async function callOpenAICompatible(
 async function callGemini(
     apiKey: string,
     systemPrompt: string,
-    userMessage: string,
-    retryCount = 0
+    userMessage: string
 ): Promise<string> {
-    try {
-        const { GoogleGenerativeAI } = await import('@google/generative-ai')
-        const genAI = new GoogleGenerativeAI(apiKey)
+    const { GoogleGenerativeAI } = await import('@google/generative-ai')
+    const genAI = new GoogleGenerativeAI(apiKey)
 
-        // Use 1.5-flash as it has much higher reasoning for premium code generation
-        const model = genAI.getGenerativeModel({
-            model: 'gemini-1.5-flash',
-            systemInstruction: systemPrompt,
-        })
+    // gemini-2.0-flash: faster, higher free quota, better code quality
+    const model = genAI.getGenerativeModel({
+        model: 'gemini-2.0-flash',
+        systemInstruction: systemPrompt,
+        generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
+    })
 
-        const result = await model.generateContent(userMessage)
-        return result.response.text()
-    } catch (err: any) {
-        // Handle Rate Limit (429) specifically
-        // Free Tier: 5 RPM (Requests Per Minute). We need to wait for a window reset.
-        if (err.message?.includes('429') && retryCount < 5) {
-            const waitTime = (retryCount + 1) * 20000 + Math.random() * 5000
-            console.log(`[Rate Limit] 429 detected. Quota exhausted. Waiting for window reset (${Math.round(waitTime / 1000)}s)... (Attempt ${retryCount + 1}/5)`)
-            await sleep(waitTime)
-            return callGemini(apiKey, systemPrompt, userMessage, retryCount + 1)
-        }
-
-        throw err
-    }
+    const result = await model.generateContent(userMessage)
+    return result.response.text()
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -219,7 +221,9 @@ export async function runOrchestrator(
     }
 
     try {
-        return JSON.parse(jsonMatch[0]) as OrchestratorPlan
+        const plan = JSON.parse(jsonMatch[0]) as OrchestratorPlan
+        console.log(`[AI Orchestrator] Plan generated: ${plan.project_type} with ${plan.file_plan?.length} files.`)
+        return plan
     } catch {
         throw new Error('Orchestrator JSON parse failed: ' + raw.substring(0, 200))
     }
@@ -272,6 +276,20 @@ User's Original Request:
     }
 }
 
+function extractCode(raw: string): string {
+    const startIdx = raw.indexOf('```')
+    if (startIdx === -1) return raw.trim()
+
+    const endIdx = raw.lastIndexOf('```')
+    if (endIdx > startIdx) {
+        let code = raw.substring(startIdx, endIdx)
+        // Remove the language identifier (e.g. ```tsx)
+        code = code.replace(/^```[a-zA-Z]*\n?/, '')
+        return code.trim()
+    }
+    return raw.trim()
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  AGENT 3: Code Generator (streaming, file by file)
 // ─────────────────────────────────────────────────────────────────
@@ -309,7 +327,8 @@ Generate ONLY the complete content for: ${filePath}
 `.trim()
 
     const systemPrompt = CODE_GENERATOR_PROMPT + '\n' + IMAGE_INJECTION_PROMPT
-    return callLLM(systemPrompt, input, opts)
+    const raw = await callLLM(systemPrompt, input, opts)
+    return extractCode(raw)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -338,7 +357,8 @@ MODIFICATION INSTRUCTION:
 "${modification}"
 `.trim()
 
-    return callLLM(REFACTOR_PROMPT, input, opts)
+    const raw = await callLLM(REFACTOR_PROMPT, input, opts)
+    return extractCode(raw)
 }
 
 
@@ -361,7 +381,8 @@ FILE CONTENT:
 ${fileContent}
 `.trim()
 
-    return callLLM(DEBUG_PROMPT, input, opts)
+    const raw = await callLLM(DEBUG_PROMPT, input, opts)
+    return extractCode(raw)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -384,5 +405,6 @@ ${plannerOutput.architecture.slice(0, 15).map(f => `- ${f.path}: ${f.purpose}`).
 Generate the complete public/preview.html file.
 `.trim()
 
-    return callLLM(PREVIEW_GENERATOR_PROMPT, input, opts)
+    const raw = await callLLM(PREVIEW_GENERATOR_PROMPT, input, opts)
+    return extractCode(raw)
 }

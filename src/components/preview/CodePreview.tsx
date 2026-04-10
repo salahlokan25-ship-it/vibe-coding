@@ -4,19 +4,23 @@ import { useRef, useEffect, useState } from 'react'
 
 interface CodePreviewProps {
     code: string
+    isSelectionMode?: boolean
 }
 
 function parseFiles(code: string) {
     const files: { path: string; content: string }[] = []
+    // Handle both literal newlines and escaped \\n in file tags
+    const normalized = code.replace(/\\n/g, '\n')
     const regex = /<file path="([^"]+)">([\s\S]*?)(?:<\/file>|$)/g
     let match
-    while ((match = regex.exec(code)) !== null) {
-        files.push({ path: match[1], content: match[2].trim() })
+    while ((match = regex.exec(normalized)) !== null) {
+        const content = match[2].trim()
+        if (content) files.push({ path: match[1], content })
     }
     return files
 }
 
-export default function CodePreview({ code }: CodePreviewProps) {
+export default function CodePreview({ code, isSelectionMode = false }: CodePreviewProps) {
     const iframeRef = useRef<HTMLIFrameElement>(null)
     const [srcDoc, setSrcDoc] = useState('')
 
@@ -26,6 +30,7 @@ export default function CodePreview({ code }: CodePreviewProps) {
                 <!DOCTYPE html>
                 <html style="background: #020617; color: #f1f5f9; font-family: 'Inter', system-ui, sans-serif; height: 100%; display: flex; align-items: center; justify-content: center; text-align: center;">
                 <head>
+                    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
                     <script src="https://cdn.tailwindcss.com"></script>
                 </head>
                 <body class="m-0 bg-[#020617] text-white overflow-hidden">
@@ -53,92 +58,150 @@ export default function CodePreview({ code }: CodePreviewProps) {
         const files = parseFiles(code)
         let htmlContent = ''
 
-        // Strategy 1: Prioritize dedicated preview.html (new architecture), then index.html fallbacks
+        // Strategy 1: Prioritize dedicated preview.html, then index.html
         const entryPoints = [
-            'public/preview.html',  // NEW: dedicated preview file
+            'public/preview.html',
             'preview.html',
-            'public/index.html',    // Legacy fallback
+            'public/index.html',
             'index.html',
             '/index.html',
             'src/index.html'
         ]
 
-        let htmlFile = files.find(f => entryPoints.includes(f.path.toLowerCase()))
+        let htmlFile = files.find(f => {
+            const normalized = f.path.toLowerCase().replace(/^\.?\//, '')
+            return entryPoints.some(ep => normalized === ep.toLowerCase().replace(/^\.?\//, ''))
+        })
 
-        // Strategy 2: Look for ANY html file if entry points missing
         if (!htmlFile) {
-            htmlFile = files.find(f => f.path.endsWith('.html'))
+            htmlFile = files.find(f => f.path.toLowerCase().endsWith('.html'))
         }
 
         if (htmlFile) {
             htmlContent = htmlFile.content
-
-            // Inject a small script to handle internal links or message parent if needed
-            if (!htmlContent.includes('<script')) {
+            // Inject sentinel and interaction engine
+            if (!htmlContent.includes('BUILD_AI_SENTINEL')) {
                 htmlContent = htmlContent.replace('</body>', `
-                    <script>
-                        console.log('VibeCoder Preview Active');
+                    <script data-id="BUILD_AI_SENTINEL">
+                        window.onerror = function(msg, url, line, col, error) {
+                            window.parent.postMessage({ type: 'PREVIEW_ERROR', payload: { message: msg } }, '*');
+                            return false; 
+                        };
+                        console.log('BuildAI Sentinel Active');
+
+                        const vibeOverlay = document.createElement('div');
+                        vibeOverlay.style.cssText = 'position:fixed; pointer-events:none; z-index:2147483647; border:2px solid #FF5C00; background:rgba(255,92,0,0.15); border-radius:4px; transition:all 0.05s ease-out; opacity:0; box-shadow:0 0 15px rgba(255,92,0,0.4);';
+                        document.body.appendChild(vibeOverlay);
+
+                        let vibeActiveEl = null;
+                        let isSelectionMode = false;
+
+                        window.addEventListener('message', (e) => {
+                            if(e.data?.type === 'TOGGLE_VIBE_SELECT') isSelectionMode = e.data.payload.active;
+                            if(!isSelectionMode) vibeOverlay.style.opacity = '0';
+                        });
+
+                        document.addEventListener('mousemove', (e) => {
+                            if(!isSelectionMode) return;
+                            const el = document.elementFromPoint(e.clientX, e.clientY);
+                            if(!el || el === document.body || el === document.documentElement) return;
+                            if(el !== vibeActiveEl) {
+                                vibeActiveEl = el;
+                                const rect = el.getBoundingClientRect();
+                                vibeOverlay.style.left = rect.left + 'px';
+                                vibeOverlay.style.top = rect.top + 'px';
+                                vibeOverlay.style.width = rect.width + 'px';
+                                vibeOverlay.style.height = rect.height + 'px';
+                                vibeOverlay.style.opacity = '1';
+                            }
+                        });
+
+                        document.addEventListener('click', (e) => {
+                            if(!isSelectionMode || !vibeActiveEl) return;
+                            e.preventDefault(); e.stopPropagation();
+                            window.parent.postMessage({
+                                type: 'VIBE_ELEMENT_SELECTED',
+                                payload: { tagName: vibeActiveEl.tagName.toLowerCase(), text: vibeActiveEl.innerText }
+                            }, '*');
+                        }, true);
                     </script>
                 </body>`)
             }
         } else if (files.length > 0) {
-            // Strategy 3: Multi-file project but no entry HTML. Show a high-end dashboard.
-            htmlContent = `
-            <!DOCTYPE html>
-            <html class="dark">
-            <head>
-                <script src="https://cdn.tailwindcss.com"></script>
-                <style>
-                    body { background-color: #020617; color: #f1f5f9; font-family: system-ui, -apple-system, sans-serif; }
-                    .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
-                </style>
-            </head>
-            <body class="flex items-center justify-center min-h-screen p-8 text-center">
-                <div class="glass-card max-w-md w-full rounded-3xl p-10 shadow-2xl">
-                    <div class="w-16 h-16 bg-orange-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                        <svg class="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z"/></svg>
-                    </div>
-                    <h2 class="text-2xl font-bold mb-3 tracking-tight text-white">Fullstack Build Complete</h2>
-                    <p class="text-slate-400 mb-8 leading-relaxed text-[15px]">
-                        The BuildAI agent has finished generating your multi-file architecture. 
-                        You can explore the source code in the <strong>Code</strong> tab.
-                    </p>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="bg-white/5 border border-white/10 rounded-xl p-3 text-left">
-                            <p class="text-[11px] uppercase tracking-wider text-slate-500 mb-1 font-bold">Files</p>
-                            <p class="text-lg font-mono text-orange-400">${files.length}</p>
-                        </div>
-                        <div class="bg-white/5 border border-white/10 rounded-xl p-3 text-left">
-                            <p class="text-[11px] uppercase tracking-wider text-slate-500 mb-1 font-bold">Status</p>
-                            <p class="text-lg text-emerald-400">Deployed</p>
-                        </div>
-                    </div>
-                </div>
-            </body>
-            </html>
-            `
-        } else {
-            // Strategy 4: Raw text fallback
-            const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            htmlContent = `
+            // Strategy JSX-Mock: Convert component source to visual mock
+            const mainPage = files.find(f => 
+                f.path.toLowerCase().includes('page.tsx') || 
+                f.path.toLowerCase().includes('app.tsx') || 
+                f.path.toLowerCase().includes('index.tsx')
+            ) || files[0]
+
+            if (mainPage) {
+                let bodyMock = mainPage.content
+                    .replace(/^\s*import.*$/gm, '') // Remove imports
+                    .replace(/^\s*export.*$/gm, '') // Remove exports
+                    .replace(/^.*export\s+default\s+function.*$/gm, '')
+                    .replace(/return\s*\(\s*/g, '')
+                    .replace(/\s*\);?\s*\}\s*$/gm, '')
+                    .replace(/className=/g, 'class=')
+                    .replace(/\{(['"])([^'"]+)\1\}/g, '$2')
+                    .replace(/\{`([^`]+)`\}/g, '$1')
+                    .replace(/\{[^{}]*\}/g, '') // remove JS blocks
+                    .replace(/<motion\.[a-z0-9]+/gi, m => m.replace('<motion.', '<'))
+                    .replace(/<\/motion\.[a-z0-9]+>/gi, m => m.replace('</motion.', '</'))
+                    .replace(/<Link/g, '<a').replace(/<\/Link>/g, '</a>')
+                    .replace(/<[A-Z][a-zA-Z0-9]*/g, '<div')
+                    .replace(/<\/[A-Z][a-zA-Z0-9]*/g, '</div')
+                    .trim()
+                
+                // Aggressive source cleanup
+                if (bodyMock.includes('import ') || bodyMock.includes('export ')) {
+                   const firstTag = bodyMock.indexOf('<');
+                   if (firstTag !== -1) bodyMock = bodyMock.substring(firstTag);
+                }
+
+                htmlContent = `
                 <!DOCTYPE html>
-                <html style="background: #0a0a0f; color: #f1f5f9; font-family: 'JetBrains Mono', monospace; padding: 24px; font-size: 14px; line-height: 1.5;">
-                <body><pre style="white-space: pre-wrap; word-wrap: break-word; color: #94a3b8;">${escapedCode}</pre></body>
-                </html>
-            `
+                <html class="dark">
+                <head>
+                    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Syne:wght@700;800;900&display=swap" rel="stylesheet">
+                    <script src="https://cdn.tailwindcss.com"></script>
+                    <style>
+                        body { background-color: #020617; color: #f1f5f9; font-family: 'Inter', sans-serif; }
+                        h1, h2, h3, .syne { font-family: 'Syne', sans-serif; }
+                        .mock-root { padding: 4rem 2rem; display: flex; flex-direction: column; gap: 2rem; align-items: center; }
+                    </style>
+                </head>
+                <body class="min-h-screen">
+                    <div class="fixed top-4 left-4 z-[999] px-3 py-1 bg-[#FF5C00]/20 border border-[#FF5C00]/50 text-[#FF5C00] rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md">Virtual High-Fidelity Preview</div>
+                    <div class="mock-root">${bodyMock}</div>
+                </body>
+                </html>`
+            }
+        } else {
+            const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            htmlContent = `<!DOCTYPE html><body style="background:#0a0a0f;color:#94a3b8;font-family:monospace;padding:2rem;"><pre>${escaped}</pre></body></html>`
         }
 
         setSrcDoc(htmlContent)
     }, [code])
 
+    // Sync isSelectionMode prop by posting message to iframe
+    useEffect(() => {
+        if (iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.postMessage(
+                { type: 'TOGGLE_VIBE_SELECT', payload: { active: isSelectionMode } },
+                '*'
+            )
+        }
+    }, [isSelectionMode])
+
     return (
         <iframe
             ref={iframeRef}
             srcDoc={srcDoc}
-            className="w-full h-full border-0 bg-white"
+            className="w-full h-full border-0 bg-[#020617]"
             title="Live Preview"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            id="live-preview-iframe"
         />
     )
 }

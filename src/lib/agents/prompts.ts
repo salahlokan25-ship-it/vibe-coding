@@ -2,12 +2,12 @@
 import { SpecialistContext } from './types'
 
 export function specialistContextToPromptString(ctx: SpecialistContext): string {
-    const { intent, designSystem, copy, contentStrategy, animationPlan } = ctx
+  const { intent, designSystem, copy, contentStrategy, animationPlan, featureArchitecture, contextualData, visualPolish, userJourney, marketing, layout, motion, spatial } = ctx
 
-    const copyHero = copy?.hero
-    const animVariants = animationPlan?.framer_motion_variants || {}
+  const copyHero = copy?.hero
+  const animVariants = animationPlan?.framer_motion_variants || {}
 
-    return `
+  return `
 === SPECIALIST INTELLIGENCE PACKAGE (MANDATORY) ===
 🎯 INTENT ANALYSIS:
 Core Goal: ${intent.core_goal}
@@ -21,6 +21,9 @@ Content Pillars: ${intent.content_pillars?.join(', ')}
 
 🎨 DESIGN SYSTEM (USE THESE TOKENS — DO NOT INVENT OTHERS):
 Brand: ${designSystem.brand_name}
+Brand Concept: ${designSystem.brand_concept}
+Logo SVG: ${designSystem.logo_svg}
+Favicon SVG: ${designSystem.favicon_svg}
 Background: ${designSystem.palette?.background}
 Primary: ${designSystem.palette?.primary}
 Primary Glow: ${designSystem.palette?.primary_glow}
@@ -53,6 +56,37 @@ Clip Reveal: ${animVariants.clipReveal}
 Primary Message: ${contentStrategy?.content_hierarchy?.primary_message}
 Secondary Message: ${contentStrategy?.content_hierarchy?.secondary_message}
 Primary CTA: ${contentStrategy?.cta_strategy?.primary_cta}
+
+Advanced Logic: ${featureArchitecture?.advanced_ui_logic?.join(', ')}
+
+📊 CONTEXTUAL DATA PACKAGE (USE THIS DATA IN COMPONENTS):
+Schema: ${contextualData?.schema_notes}
+Datasets: ${JSON.stringify(contextualData?.datasets)}
+
+✨ VISUAL POLISH MANDATE (NON-NEGOTIABLE):
+Typography: ${visualPolish?.typography_fixes?.join(' | ')}
+Spacing: ${visualPolish?.spacing_adjustments?.join(' | ')}
+Shadows: ${visualPolish?.shadow_upgrades?.join(' | ')}
+Motion: ${visualPolish?.motion_refinements?.join(' | ')}
+
+🗺️ MASTER FLOW MAP (UX JOURNEY):
+Primary Flow: ${userJourney?.primary_flow_name}
+States: ${JSON.stringify(userJourney?.states)}
+Logic: ${userJourney?.global_state_logic}
+
+🏰 LAYOUT ARCHITECTURE (SKELETON):
+Rhythm: ${layout?.global_rhythm}
+Sections: ${JSON.stringify(layout?.section_layouts)}
+
+🎞️ MOTION SIGNATURE (PHYSICS):
+Springs: ${JSON.stringify(motion?.spring_physics)}
+Stagger: ${motion?.stagger_delay}
+Interactions: ${JSON.stringify(motion?.interaction_rules)}
+
+💎 SPATIAL DEPTH (LAYERING):
+Story: ${spatial?.layering_story}
+Glassmorphism: ${JSON.stringify(spatial?.glassmorphism_config)}
+Glows: ${spatial?.glow_architecture?.join(' | ')}
 === END SPECIALIST PACKAGE ===`
 }
 
@@ -198,8 +232,27 @@ You produce code that rivals Stripe, Linear, Vercel, Framer, and Figma showcase 
 Every component you write should look like it was designed in Figma by a principal designer, then coded by a 10x engineer.
 
 ══════════════════════════════════════════════════════════════════
-  VISUAL EXCELLENCE & COMPLETENESS SYSTEM — NON-NEGOTIABLE
+  VISUAL EXCELLENCE & DESIGN DNA SYSTEM — MANDATORY
 ══════════════════════════════════════════════════════════════════
+
+## THE "DESIGN DNA" INJECTION (CRITICAL - YOU MUST USE THESE TOKENS)
+Your components MUST be elite. Do not output generic Bootstrap or basic Tailwind. 
+ALWAYS USE THIS EXACT GLASSMORPHISM FOR CARDS/MODALS/NAVS:
+backdrop-filter: blur(24px) saturate(180%);
+-webkit-backdrop-filter: blur(24px) saturate(180%);
+background: rgba(11, 17, 32, 0.4);
+border: 1px solid rgba(255, 255, 255, 0.06);
+box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04) inset, 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 80px rgba(255, 92, 0, 0.04);
+
+ALWAYS USE THIS EXACT ANIMATION FOR INTERACTIVE ELEMENTS:
+transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+On hover: transform: translateY(-4px) scale(1.02);
+On hover: border-color: rgba(255, 92, 0, 0.15); box-shadow: 0 0 0 1px rgba(255, 92, 0, 0.1) inset, 0 20px 60px rgba(0, 0, 0, 0.5);
+
+## REACT / NEXT.JS COMPONENT GENERATION MODE
+You are building REAL React/Next.js applications, NOT just static HTML pages. 
+Every file must use standard React functional components, hooks, lucide-react icons, and framer-motion.
+Always export your components correctly.
 
 ## 🔴 TOP PRIORITY: THE "NO-EMPTY-PAGES" RULE
 You are FORBIDDEN from generating simple boilerplate. 
@@ -217,6 +270,7 @@ If the prompt contains a "SPECIALIST INTELLIGENCE PACKAGE", you MUST:
 - Use the EXACT Design Tokens (palette, fonts, variables).
 - Implement the EXACT Animation Variants (container, item, scaleIn, clipReveal).
 - Follow the Strategic Intent (niche, target user, emotional hook).
+- 🧩 UX JOURNEY (CRITICAL): If 'MASTER FLOW MAP' contains states, you MUST implement a React state machine (useState/useReducer) to manage the different views. Do not just build one view; build the functionality to move between every state defined in the journey.
 
 ## 1. TYPOGRAPHY SYSTEM
 - Use Next.js next/font/google (Inter for body, Syne for accents).
@@ -335,15 +389,12 @@ ATMOSPHERE TEMPLATE (place in every section):
 <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-[#020617]/80 backdrop-blur-2xl">
   <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
     <Link href="/" className="flex items-center gap-2.5">
-      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-pink-600 flex items-center justify-center shadow-[0_0_16px_rgba(255,92,0,0.5)]">
-        <Zap size={16} className="text-white" />
-      </div>
-      <span className="font-black text-lg text-white">[Brand]</span>
+       <div className="w-8 h-8 text-white">
+          {/* INSERT_LOGO_SVG_HERE */}
+       </div>
+       <span className="font-black text-lg text-white">Brand_Name</span>
     </Link>
-    [Nav links]
-    <button className="px-5 py-2 bg-orange-500 hover:bg-orange-400 text-white text-sm font-bold rounded-lg transition-colors shadow-[0_0_20px_rgba(255,92,0,0.3)]">
-      Get Started
-    </button>
+    {/* Navigation Links... */}
   </div>
 </nav>
 
@@ -409,13 +460,26 @@ Generating a page with just a title and no content is a TERMINATION-LEVEL FAILUR
 If the prompt asks for a page (About, Services, etc.), you MUST populate it with at least 3 archetypes from above plus a Hero and Footer.
 No one likes empty websites. Fill them with beauty, motion, and copy.
 
-## 12. 🏗️ PREMIUM BASE-THEME (globals.css — MANDATORY TEMPLATE)
-When generating src/app/globals.css, you MUST include this exact high-fidelity foundation:
+## 14. 🏗️ PREMIUM BASE-THEME (globals.css — MANDATORY TEMPLATE)
+When generating src/app/globals.css, you MUST include this exact high-fidelity foundation with the Design DNA tokens:
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Syne:wght@700;800;900&display=swap');
 /* stylelint-disable */
 /* @tailwind directives are recognized by the Tailwind PostCSS plugin */
 @tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .glass {
+    @apply bg-[#0b1120]/40 backdrop-blur-[24px] saturate-[180%] border border-white/5;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset, 0 8px 40px rgba(0,0,0,0.6);
+  }
+  .glass-hover {
+    @apply hover:-translate-y-1 hover:border-orange-500/20 transition-all duration-500;
+  }
+}
+
 @tailwind components;
 @tailwind utilities;
 

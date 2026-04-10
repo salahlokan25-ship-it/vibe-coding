@@ -23,6 +23,8 @@ interface AgentProgressProps {
     plan?: { project_type: string; features: string[]; file_plan: string[] } | null
     onClose?: () => void
     thoughts?: Array<{ agent: string, message: string, timestamp: number }>
+    error?: string | null
+    selectedModel?: string
 }
 
 const AGENT_META: Record<string, { icon: React.ReactNode; color: string; name: string }> = {
@@ -49,7 +51,9 @@ export default function AgentProgress({
     status,
     plan,
     onClose,
-    thoughts = []
+    thoughts = [],
+    error,
+    selectedModel
 }: AgentProgressProps) {
     const [isExpanded, setIsExpanded] = useState(true)
     const logRef = useRef<HTMLDivElement>(null)
@@ -74,7 +78,7 @@ export default function AgentProgress({
             className="w-full max-w-xl mx-auto border border-white/10 rounded-[2rem] bg-[#0B0F19]/90 backdrop-blur-3xl shadow-[0_32px_64px_rgba(0,0,0,0.5)] overflow-hidden relative group pointer-events-auto"
         >
             {/* Top Shine */}
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-orange-500/50 to-transparent z-10" />
+            <div className={`absolute top-0 left-0 right-0 h-px transition-all z-10 ${status === 'error' ? 'bg-gradient-to-r from-transparent via-red-500/50 to-transparent' : 'bg-gradient-to-r from-transparent via-orange-500/50 to-transparent'}`} />
 
             {/* Subtle Gradient Orbs */}
             <div className="absolute -top-20 -left-20 w-40 h-40 bg-orange-600/10 rounded-full blur-[80px] pointer-events-none" />
@@ -83,14 +87,21 @@ export default function AgentProgress({
             {/* Header Area */}
             <div className="px-6 py-4 flex items-center justify-between border-b border-white/5 bg-white/[0.02]">
                 <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-500 ${status === 'running' ? 'bg-orange-500/10 text-orange-400 animate-pulse' : 'bg-emerald-500/10 text-emerald-400'}`}>
-                        {status === 'running' ? <Activity size={16} /> : <CheckCircle2 size={16} />}
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-500 ${status === 'running' ? 'bg-orange-500/10 text-orange-400 animate-pulse' :
+                        status === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
+                        }`}>
+                        {status === 'running' ? <Activity size={16} /> : status === 'error' ? <X size={16} /> : <CheckCircle2 size={16} />}
                     </div>
                     <div className="space-y-0.5">
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40">Multi-Agent Core</h3>
+                        <h3 className={`text-[10px] font-black uppercase tracking-[0.25em] ${status === 'error' ? 'text-red-400/50' : 'text-white/40'}`}>Multi-Agent Core</h3>
                         <p className="text-xs font-bold text-white tracking-tight">
-                            {status === 'running' ? 'Active Synthesis...' : 'Build Finalized'}
+                            {status === 'running' ? 'Active Synthesis...' : status === 'error' ? `Synthesis Failed (${selectedModel || 'AI'})` : 'Build Finalized'}
                         </p>
+                        {status === 'error' && error && (
+                            <p className="text-[11px] text-red-500 font-bold leading-tight max-w-[260px] animate-in fade-in slide-in-from-top-1">
+                                {error}
+                            </p>
+                        )}
                     </div>
                 </div>
 
@@ -188,10 +199,10 @@ export default function AgentProgress({
 
                                 <div className="flex -space-x-2">
                                     {Array.from(new Set(thoughts.map(t => t.agent))).map((agent) => (
-                                        <motion.div 
+                                        <motion.div
                                             initial={{ scale: 0, x: 10 }}
                                             animate={{ scale: 1, x: 0 }}
-                                            key={agent} 
+                                            key={agent}
                                             className={`w-6 h-6 rounded-full border border-[#0B0F19] bg-white/[0.03] flex items-center justify-center ${AGENT_META[agent]?.color || 'text-white/40'} bg-black/40 backdrop-blur-xl shadow-lg ring-1 ring-white/10`}
                                             title={AGENT_META[agent]?.name}
                                         >
