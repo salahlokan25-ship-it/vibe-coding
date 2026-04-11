@@ -7,6 +7,9 @@
         "typescript": "ts"
     },
     "files.associations": {
-        "*.css": "postcss"
-    }
+        "*.css": "tailwindcss"
+    },
+    "css.customData": [
+        "vibecoder/.vscode/tailwind-data.json"
+    ]
 }
