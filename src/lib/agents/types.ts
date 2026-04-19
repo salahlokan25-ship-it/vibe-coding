@@ -34,11 +34,6 @@ export interface PlannerOutput {
 
 export interface AgentRunnerOptions {
     geminiKey?: string
-    kimiKey?: string
-    groqKey?: string
-    bytezKey?: string
-    serperKey?: string
-    [key: string]: string | undefined
 }
 
 export interface IntentAnalysis {

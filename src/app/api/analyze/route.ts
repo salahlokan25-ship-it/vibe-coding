@@ -104,16 +104,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
         }
 
-        const opts = {
-            geminiKey: process.env.GEMINI_API_KEY?.trim(),
-            kimiKey: process.env.KIMI_API_KEY?.trim(),
-            bytezKey: process.env.BYTEZ_API_KEY?.trim(),
-        }
-
         const raw = await callLLM(
             ANALYZER_SYSTEM_PROMPT,
             `Analyze this project idea in depth: "${prompt}"`,
-            opts
+            {}
         )
 
         const cleanRaw = raw.replace(/```json\n?|```\n?/gi, '').trim()

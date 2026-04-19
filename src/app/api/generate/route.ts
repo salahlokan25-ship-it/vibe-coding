@@ -294,14 +294,9 @@ export async function POST(req: NextRequest) {
       prompt,
       history = [],
       useStitch,
-      useKimi,              // Kimi K2.5 mode (NVIDIA NIM)
       existingFiles = {},
       forceNew = false
     } = await req.json()
-
-    const geminiKey = process.env.GEMINI_API_KEY?.trim()
-    const bytezKey = process.env.BYTEZ_API_KEY?.trim()
-    const kimiKey = process.env.KIMI_API_KEY?.trim()
 
     // ── AGENT LAYER ──────────────────────────────────────────────────────────
     const hasExistingProject = Object.keys(existingFiles).length > 0
@@ -310,171 +305,14 @@ export async function POST(req: NextRequest) {
     const agentPrompt = buildPlannerPrompt(prompt, intent, isRefactor, Object.keys(existingFiles))
     // ─────────────────────────────────────────────────────────────────────────
 
+    // Hardcoded Gemini API key
+    const GEMINI_API_KEY = 'AIzaSyAnAk6aqecsPNjoYrzTjZuWGknLZJDTUbY'
+    const geminiKey = process.env.GEMINI_API_KEY?.trim() || GEMINI_API_KEY
+
     // Choose system prompt based on selected model / mode
-    const currentSystemPrompt = (useStitch || useKimi) ? STITCH_PROMPT : SYSTEM_PROMPT
+    const currentSystemPrompt = useStitch ? STITCH_PROMPT : SYSTEM_PROMPT
 
-    // ── PROVIDER 1: KIMI K2.5 (Moonshot AI via NVIDIA NIM) ───────────────────
-    if (useKimi && kimiKey) {
-      try {
-        console.log('Attempting Kimi K2.5 generation via NVIDIA NIM...')
-        const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${kimiKey}`,
-          },
-          body: JSON.stringify({
-            model: 'moonshotai/kimi-k2-instruct',
-            messages: [
-              { role: 'system', content: currentSystemPrompt },
-              ...history.map((h: any) => ({
-                role: h.role === 'assistant' ? 'assistant' : 'user',
-                content: h.content,
-              })),
-              { role: 'user', content: agentPrompt },
-            ],
-            stream: true,
-            temperature: 0.15,
-            max_tokens: 16384,
-            top_p: 0.9,
-          }),
-        })
-
-        if (response.ok && response.body) {
-          console.log('Kimi K2.5 stream started successfully.')
-          const reader = response.body.getReader()
-          const decoder = new TextDecoder()
-
-          const stream = new ReadableStream({
-            async start(controller) {
-              const encoder = new TextEncoder()
-              try {
-                while (true) {
-                  const { done, value } = await reader.read()
-                  if (done) break
-                  const chunk = decoder.decode(value, { stream: true })
-                  const lines = chunk.split('\n').filter(l => l.trim() !== '')
-                  for (const line of lines) {
-                    if (line.includes('[DONE]')) continue
-                    if (line.startsWith('data: ')) {
-                      try {
-                        const data = JSON.parse(line.slice(6))
-                        const content = data.choices?.[0]?.delta?.content || ''
-                        if (content) {
-                          controller.enqueue(encoder.encode(content.replace(/```html\n?|```\n?/gi, '')))
-                        }
-                      } catch (_) { /* skip malformed chunks */ }
-                    }
-                  }
-                }
-                controller.close()
-              } catch (err: any) {
-                console.error('Kimi stream error:', err.message)
-                controller.close()
-              }
-            },
-          })
-
-          return new Response(stream, {
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-              'Transfer-Encoding': 'chunked',
-            },
-          })
-        } else {
-          const errData = await response.json().catch(() => ({}))
-          console.warn('Kimi K2.5 failed, falling back:', errData.message || response.statusText)
-        }
-      } catch (err: any) {
-        console.error('Kimi connection failed:', err.message)
-      }
-    }
-
-    // ── PROVIDER 2: DEEPSEEK-V3 via ByteZ (Stitch mode) ─────────────────────
-    if (useStitch && bytezKey && bytezKey !== 'your_bytez_key_here') {
-      try {
-        console.log("Attempting Stitch generation with ByteZ (DeepSeek-V3)...");
-        const response = await fetch("https://api.bytez.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${bytezKey}`
-          },
-          body: JSON.stringify({
-            model: "deepseek-ai/DeepSeek-V3", // High-end coding model on ByteZ
-            messages: [
-              { role: "system", content: currentSystemPrompt },
-              ...history.map((h: any) => ({
-                role: h.role === 'assistant' ? 'assistant' : 'user',
-                content: h.content
-              })),
-              { role: "user", content: agentPrompt }
-            ],
-            stream: true,
-            temperature: 0.2
-          })
-        });
-
-        if (response.ok && response.body) {
-          console.log("ByteZ stream started successfully.");
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-
-          const stream = new ReadableStream({
-            async start(controller) {
-              const encoder = new TextEncoder();
-              try {
-                while (true) {
-                  const { done, value } = await reader.read();
-                  if (done) break;
-
-                  const chunk = decoder.decode(value, { stream: true });
-                  const lines = chunk.split('\n').filter(line => line.trim() !== '');
-
-                  for (const line of lines) {
-                    if (line.includes('[DONE]')) continue;
-                    if (line.startsWith('data: ')) {
-                      try {
-                        const data = JSON.parse(line.slice(6));
-                        const content = data.choices[0]?.delta?.content || "";
-                        if (content) {
-                          const sanitized = content.replace(/```html\n?|```\n?/gi, '');
-                          controller.enqueue(encoder.encode(sanitized));
-                        }
-                      } catch (e) {
-                        // Skip partial JSON chunks
-                      }
-                    }
-                  }
-                }
-                controller.close();
-              } catch (err: any) {
-                console.error("ByteZ stream read error:", err.message);
-                controller.close();
-              }
-            }
-          });
-
-          return new Response(stream, {
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-              'Transfer-Encoding': 'chunked',
-            },
-          });
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          console.warn("ByteZ failed, falling back to Gemini:", errData.error || response.statusText);
-        }
-      } catch (err: any) {
-        console.error("ByteZ connection failed:", err.message);
-      }
-    }
-
-    // ── PROVIDER 3: GEMINI (default / fallback) ───────────────────────────────
-    if (!geminiKey || geminiKey === 'your_free_api_key_here') {
-      return NextResponse.json({ error: 'Gemini API Key Missing' }, { status: 401 })
-    }
-
+    // Use Gemini only
     const genAI = new GoogleGenerativeAI(geminiKey)
     const contents = [
       ...history.map((h: any) => ({

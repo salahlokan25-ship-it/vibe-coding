@@ -4,12 +4,7 @@ import { runRefactorAgent, type AgentRunnerOptions } from '@/lib/agents/runner'
 export async function POST(req: NextRequest) {
     const { filePath, currentContent, modification, provider = 'gemini' } = await req.json()
 
-    const opts: AgentRunnerOptions = {
-        geminiKey: process.env.GEMINI_API_KEY?.trim(),
-        bytezKey: process.env.BYTEZ_API_KEY?.trim(),
-        kimiKey: process.env.KIMI_API_KEY?.trim(),
-        preferredProvider: provider as 'gemini' | 'bytez' | 'kimi',
-    }
+    const opts: AgentRunnerOptions = {}
 
     try {
         const updatedContent = await runRefactorAgent(filePath, currentContent, modification, opts)

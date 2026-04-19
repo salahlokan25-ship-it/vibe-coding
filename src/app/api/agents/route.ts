@@ -43,12 +43,7 @@ export async function POST(req: NextRequest) {
         imageContext = null,
     } = await req.json()
 
-    const opts: AgentRunnerOptions = {
-        geminiKey: process.env.GEMINI_API_KEY?.trim(),
-        kimiKey: process.env.KIMI_API_KEY?.trim(),
-        groqKey: process.env.GROQ_API_KEY?.trim(),
-        preferredProvider: (provider === 'gemini' || provider === 'groq' || provider === 'kimi') ? provider as any : 'kimi',
-    }
+    const opts: AgentRunnerOptions = {}
 
     const hasExistingProject = Object.keys(existingFiles).length > 0
     const isRefactor = !forceNew && isRefactorRequest(prompt, hasExistingProject)

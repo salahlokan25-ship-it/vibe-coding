@@ -673,7 +673,7 @@ Format:
 }
 `
 
-        const rawRes = await callLLM('You output pure JSON only.', analysisPrompt, opts || { geminiKey: process.env.GEMINI_API_KEY })
+        const rawRes = await callLLM('You output pure JSON only.', analysisPrompt, opts || {})
         const jsonMatch = rawRes.replace(/```json\n?|```\n?/gi, '').trim().match(/\{[\s\S]*\}/)
 
         if (jsonMatch) {
@@ -691,86 +691,9 @@ Format:
 // Searches Dribbble, Behance, and Godly.website for top niche design trends
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function runVisualTrendScout(intent: IntentAnalysis, opts?: AgentRunnerOptions): Promise<VisualTrend | undefined> {
-    const serperKey = process.env.SERPER_API_KEY || (opts && opts.serperKey)
-
-    if (!serperKey) {
-        console.log('[Visual Trend Scout] No SERPER_API_KEY set — skipping trend search.')
-        return undefined
-    }
-
-    console.log(`[Visual Trend Scout] Searching top 2025 design trends for: ${intent.niche}...`)
-
-    try {
-        const query = `site:godly.website OR site:dribbble.com OR site:behance.net best ${intent.niche} website design 2025`
-
-        const res = await fetch('https://google.serper.dev/search', {
-            method: 'POST',
-            headers: {
-                'X-API-KEY': serperKey,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                q: query,
-                num: 10
-            }),
-            signal: AbortSignal.timeout(8000)
-        })
-
-        if (!res.ok) throw new Error(`Serper API returned ${res.status}`)
-
-        const data = await res.json()
-        const snippets = (data.organic || []).map((r: any) => `Title: ${r.title}\nSnippet: ${r.snippet}\nURL: ${r.link}`).join('\n\n')
-
-        if (!snippets) return undefined
-
-        // Use LLM to synthesize the raw search results into a definitive design mandate
-        const analysisPrompt = `
-You are the Creative Director at BuildAI.
-I just searched Godly.website, Dribbble, and Behance for the best 2025 website designs in the "${intent.niche}" industry.
-Here are the top search results:
-
-${snippets}
-
-Analyze these results and return a definitive JSON design trend mandate for our AI Coder.
-            Format:
-            {
-                "color_mood": "e.g., Deep obsidian backgrounds with neon cyan accents",
-                    "layout_style": "e.g., Asymmetric bento grids with overlapping typography",
-                        "typography_style": "e.g., Massive brutalist sans-serif headers with clean monospace details",
-                            "design_mandate": "A strong, 2-sentence instruction for the UI engineer on exactly how to make this feel top-tier and trending right now based on the search results."
-            }
-        `
-
-        // If opts missing, we fallback to our known free keys or the first available
-        const rawAnalysis = await callLLM('You output pure JSON only.', analysisPrompt, opts || { geminiKey: process.env.GEMINI_API_KEY })
-        const jsonMatch = rawAnalysis.replace(/```json\n ?| ```\n?/gi, '').trim().match(/\{[\s\S]*\}/)
-
-        let analysis = {
-            color_mood: 'Modern and vibrant',
-            layout_style: 'Clean hierarchy',
-            typography_style: 'Legible and bold',
-            design_mandate: 'Focus on clean layout and good contrast.'
-        }
-
-        if (jsonMatch) {
-            try {
-                analysis = JSON.parse(jsonMatch[0])
-            } catch (e) {
-                console.warn('[Visual Trend Scout] Failed to parse LLM analysis JSON.')
-            }
-        }
-
-        const inspiringSites = (data.organic || []).slice(0, 3).map((r: any) => r.link)
-
-        return {
-            ...analysis,
-            inspiring_sites: inspiringSites
-        }
-    } catch (err) {
-        console.warn('[Visual Trend Scout] Failed to fetch trends:', err)
-        return undefined
-    }
+async function runVisualTrendScout(_intent: IntentAnalysis, _opts?: AgentRunnerOptions): Promise<VisualTrend | undefined> {
+    console.log('[Visual Trend Scout] Skipping trend search (API key removed).')
+    return undefined
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

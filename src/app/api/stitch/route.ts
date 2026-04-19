@@ -184,33 +184,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
     }
 
-    const geminiKey = process.env.GEMINI_API_KEY?.trim()
-    const kimiKey = process.env.KIMI_API_KEY?.trim()
-    const bytezKey = process.env.BYTEZ_API_KEY?.trim()
+    // Hardcoded Gemini API key
+    const GEMINI_API_KEY = 'AIzaSyAnAk6aqecsPNjoYrzTjZuWGknLZJDTUbY'
+    const geminiKey = process.env.GEMINI_API_KEY?.trim() || GEMINI_API_KEY
 
     let raw = ''
 
-    // Try Kimi first (fastest), then Gemini, then ByteZ
+    // Use Gemini only
     try {
-        if (kimiKey) {
-            raw = await callOpenAICompatibleForDesign(
-                'https://integrate.api.nvidia.com/v1',
-                'moonshotai/kimi-k2-instruct',
-                kimiKey,
-                prompt
-            )
-        } else if (geminiKey) {
-            raw = await callGeminiForDesign(geminiKey, prompt)
-        } else if (bytezKey) {
-            raw = await callOpenAICompatibleForDesign(
-                'https://api.bytez.com/v1',
-                'deepseek-ai/DeepSeek-V3',
-                bytezKey,
-                prompt
-            )
-        } else {
-            throw new Error('No AI provider configured')
-        }
+        raw = await callGeminiForDesign(geminiKey, prompt)
     } catch (err: any) {
         console.error('[Stitch Agent] Error:', err.message)
         return NextResponse.json({ error: err.message }, { status: 500 })

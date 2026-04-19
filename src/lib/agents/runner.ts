@@ -35,111 +35,27 @@ async function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// Hardcoded Gemini API key
+const GEMINI_API_KEY = 'AIzaSyAnAk6aqecsPNjoYrzTjZuWGknLZJDTUbY'
+
 export async function callLLM(
     systemPrompt: string,
     userMessage: string,
-    opts: AgentRunnerOptions
+    opts?: AgentRunnerOptions
 ): Promise<string> {
-    const providers = []
-
-    // ── PROVIDER ORDER (optimized for reliability based on live usage) ──
-    // Priority: Kimi (most reliable) > Groq (fastest when not rate-limited) > Gemini (key issues) 
-
-    // 1. Kimi via NVIDIA (Most Reliable — confirmed working)
-    if (opts.kimiKey) {
-        const kimiKey = opts.kimiKey.trim()
-        providers.push({
-            name: 'kimi',
-            call: () => callOpenAICompatible(
-                'https://integrate.api.nvidia.com/v1',
-                'meta/llama-3.3-70b-instruct',
-                kimiKey,
-                systemPrompt,
-                userMessage,
-                8192
-            )
-        })
+    const geminiKey = opts?.geminiKey?.trim() || GEMINI_API_KEY
+    
+    try {
+        console.log(`[AI] → gemini`)
+        fs.appendFileSync('src/lib/agents/ai_debug.log', `[${new Date().toISOString()}] [AI] Calling gemini\n`)
+        const result = await callGemini(geminiKey, systemPrompt, userMessage)
+        fs.appendFileSync('src/lib/agents/ai_debug.log', `[${new Date().toISOString()}] [AI] gemini ✓ success\n`)
+        return result
+    } catch (err: any) {
+        fs.appendFileSync('src/lib/agents/ai_debug.log', `[${new Date().toISOString()}] [AI ✗] gemini: ${err.message?.slice(0, 120)}\n`)
+        console.warn(`[AI ✗] gemini: ${err.message?.slice(0, 80)}`)
+        throw new Error(`Gemini API failed: ${err.message?.slice(0, 200)}`)
     }
-
-    // 2. Groq (Fastest when not rate-limited)
-    if (opts.groqKey) {
-        const groqKey = opts.groqKey.trim()
-        providers.push({
-            name: 'groq',
-            call: () => callOpenAICompatible(
-                'https://api.groq.com/openai/v1',
-                'llama-3.3-70b-versatile',
-                groqKey,
-                systemPrompt,
-                userMessage,
-                8000
-            )
-        })
-    }
-
-    // 3. Gemini (gemini-2.0-flash — best free quality)
-    if (opts.geminiKey) {
-        const geminiKey = opts.geminiKey.trim()
-        providers.push({
-            name: 'gemini',
-            call: () => callGemini(geminiKey, systemPrompt, userMessage)
-        })
-    }
-
-    if (providers.length === 0) {
-        throw new Error('No AI providers configured. Please add KIMI_API_KEY, GROQ_API_KEY or GEMINI_API_KEY to .env.local')
-    }
-
-    // Respect preferred provider if specified
-    if (opts.preferredProvider) {
-        const preferredIdx = providers.findIndex(p => p.name === opts.preferredProvider)
-        if (preferredIdx !== -1) {
-            const [preferred] = providers.splice(preferredIdx, 1)
-            providers.unshift(preferred)
-        }
-    }
-
-    // Chain of Responsibility: Try each provider — skip immediately on known-fatal errors
-    let lastError: any = null
-    for (const provider of providers) {
-        try {
-            console.log(`[AI] → ${provider.name}`)
-            fs.appendFileSync('src/lib/agents/ai_debug.log', `[${new Date().toISOString()}] [AI] Calling ${provider.name}\n`)
-            const result = await provider.call()
-            fs.appendFileSync('src/lib/agents/ai_debug.log', `[${new Date().toISOString()}] [AI] ${provider.name} ✓ success\n`)
-            return result
-        } catch (err: any) {
-            lastError = err
-            const errMsg = (err.message || '').toLowerCase()
-            fs.appendFileSync('src/lib/agents/ai_debug.log', `[${new Date().toISOString()}] [AI ✗] ${provider.name}: ${err.message?.slice(0, 120)}\n`)
-            console.warn(`[AI ✗] ${provider.name}: ${err.message?.slice(0, 80)}`)
-
-            // Rate limit — skip to next provider immediately (no wasted 4s wait here)
-            if (errMsg.includes('429') || errMsg.includes('too many') || errMsg.includes('rate limit')) {
-                console.warn(`[AI] ${provider.name} rate-limited → trying next`)
-                continue
-            }
-            // Auth / key invalid — skip immediately
-            if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('key not found') || errMsg.includes('api_key_invalid') || errMsg.includes('invalid api key')) {
-                console.warn(`[AI] ${provider.name} invalid key → trying next`)
-                continue
-            }
-            // Server error — skip immediately
-            if (errMsg.includes('500') || errMsg.includes('internal server') || errMsg.includes('502') || errMsg.includes('503')) {
-                console.warn(`[AI] ${provider.name} server error → trying next`)
-                continue
-            }
-            // Quota exhausted — skip
-            if (errMsg.includes('quota') || errMsg.includes('exhausted') || errMsg.includes('limit exceeded')) {
-                console.warn(`[AI] ${provider.name} quota exhausted → trying next`)
-                continue
-            }
-            // Unknown error — skip to next
-            console.warn(`[AI] ${provider.name} unknown error → trying next`)
-        }
-    }
-
-    throw new Error(`All AI providers failed. Last: ${lastError?.message?.slice(0, 200)}`)
 }
 
 async function callOpenAICompatible(

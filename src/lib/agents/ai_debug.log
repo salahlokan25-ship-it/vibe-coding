@@ -75,3 +75,15 @@
 [2026-04-09T14:01:48.541Z] [AI] Calling bytez
 [2026-04-09T14:01:50.858Z] [AI ERROR] bytez: deepseek-ai/DeepSeek-V3 failed: Internal Server Error
 [2026-04-09T14:01:50.908Z] [AI] Calling kimi
+[2026-04-18T21:06:56.417Z] [AI] Calling gemini
+[2026-04-18T21:06:56.785Z] [AI ✗] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash
+[2026-04-18T21:06:56.785Z] [AI] Calling gemini
+[2026-04-18T21:06:56.883Z] [AI ✗] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash
+[2026-04-18T21:06:56.884Z] [AI] Calling gemini
+[2026-04-18T21:06:56.979Z] [AI ✗] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash
+[2026-04-18T21:06:56.980Z] [AI] Calling gemini
+[2026-04-18T21:06:57.065Z] [AI ✗] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash
+[2026-04-18T21:09:38.112Z] [AI] Calling gemini
+[2026-04-18T21:09:38.114Z] [AI] Calling gemini
+[2026-04-18T21:09:38.489Z] [AI ✗] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash
+[2026-04-18T21:09:38.562Z] [AI ✗] gemini: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash
